@@ -189,10 +189,18 @@ impl<'a> Tokenizer<'a> {
     fn consume(&mut self) -> Option<char> {
         let c = self.peek();
         self.cursor += 1;
-        self.column += 1;
-        if c == Some('\n') {
-            self.line += 1;
-            self.column = 1;
+
+        match c {
+            Some('\n') => {
+                self.line += 1;
+                self.column = 1;
+            }
+            Some('\t') => {
+                self.column += 4;
+            }
+            _ => {
+                self.column += 1;
+            }
         }
         self.p_column = self.column;
         c

@@ -27,7 +27,8 @@ impl Parser {
         }
     }
 
-    fn error(&self, message: String) -> BauError {
+    fn error(&mut self, message: String) -> BauError {
+        _ = self.consume();
         BauError::ParseError {
             line: self.line,
             column: self.column,

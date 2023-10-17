@@ -1,5 +1,5 @@
 #[derive(Debug, Clone, PartialEq)]
-pub enum Token {
+pub enum TokenKind {
     Illegal(char),
 
     Fn,
@@ -16,11 +16,27 @@ pub enum Token {
     NumericLiteral(f64),
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct Token {
+    pub kind: TokenKind,
+    pub line: usize,
+    pub column: usize,
+}
+
+impl Token {
+    pub fn new(kind: TokenKind, line: usize, column: usize) -> Self {
+        Self { kind, line, column }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Tokenizer<'a> {
     pub tokens: Vec<Token>,
     cursor: usize,
     input: &'a str,
+    line: usize,
+    column: usize,
+    p_column: usize,
 }
 
 impl<'a> Tokenizer<'a> {
@@ -29,6 +45,9 @@ impl<'a> Tokenizer<'a> {
             tokens: vec![],
             cursor: 0,
             input,
+            line: 1,
+            column: 1,
+            p_column: 1,
         }
     }
 
@@ -42,6 +61,10 @@ impl<'a> Tokenizer<'a> {
         tokens
     }
 
+    fn token(&self, kind: TokenKind) -> Token {
+        Token::new(kind, self.line, self.column)
+    }
+
     fn parse_token(&mut self) -> Option<Token> {
         self.consume_whitespace();
 
@@ -53,7 +76,7 @@ impl<'a> Tokenizer<'a> {
             Some(identifier)
         } else if self.peek().is_some() {
             let char = self.consume().unwrap();
-            Some(Token::Illegal(char))
+            Some(self.token(TokenKind::Illegal(char)))
         } else {
             None
         }
@@ -106,7 +129,7 @@ impl<'a> Tokenizer<'a> {
                         }
                     }
 
-                    Some(Token::NumericLiteral(number_string.parse().unwrap()))
+                    Some(self.token(TokenKind::NumericLiteral(number_string.parse().unwrap())))
                 }
                 _ => None,
             },
@@ -117,12 +140,12 @@ impl<'a> Tokenizer<'a> {
     fn parse_punctuator(&mut self) -> Option<Token> {
         match self.consume() {
             Some(char) => match char {
-                '(' => Some(Token::ParenOpen),
-                ')' => Some(Token::ParenClose),
-                '{' => Some(Token::BraceOpen),
-                '}' => Some(Token::BraceClose),
-                ';' => Some(Token::Semicolon),
-                '=' => Some(Token::Equals),
+                '(' => Some(self.token(TokenKind::ParenOpen)),
+                ')' => Some(self.token(TokenKind::ParenClose)),
+                '{' => Some(self.token(TokenKind::BraceOpen)),
+                '}' => Some(self.token(TokenKind::BraceClose)),
+                ';' => Some(self.token(TokenKind::Semicolon)),
+                '=' => Some(self.token(TokenKind::Equals)),
                 _ => {
                     self.unconsume();
                     None
@@ -148,9 +171,9 @@ impl<'a> Tokenizer<'a> {
                     }
 
                     match identifier_string.as_str() {
-                        "fn" => Some(Token::Fn),
-                        "let" => Some(Token::Let),
-                        _ => Some(Token::Identifier(identifier_string)),
+                        "fn" => Some(self.token(TokenKind::Fn)),
+                        "let" => Some(self.token(TokenKind::Let)),
+                        _ => Some(self.token(TokenKind::Identifier(identifier_string))),
                     }
                 }
                 _ => None,
@@ -166,10 +189,22 @@ impl<'a> Tokenizer<'a> {
     fn consume(&mut self) -> Option<char> {
         let c = self.peek();
         self.cursor += 1;
+        self.column += 1;
+        if c == Some('\n') {
+            self.line += 1;
+            self.column = 1;
+        }
+        self.p_column = self.column;
         c
     }
 
     fn unconsume(&mut self) {
         self.cursor -= 1;
+        self.column -= 1;
+        if self.input.chars().nth(self.cursor) == Some('\n') {
+            self.line -= 1;
+            self.column = self.p_column;
+        }
+        self.p_column = self.column;
     }
 }

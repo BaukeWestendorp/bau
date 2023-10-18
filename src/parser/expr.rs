@@ -1,3 +1,4 @@
+use crate::builtins;
 use crate::error::BauResult;
 use crate::parser::ast::{Expr, Literal};
 use crate::parser::Parser;
@@ -39,6 +40,11 @@ where
                     }
                 }
                 self.consume(TokenKind::ParenClose)?;
+
+                if let Some(function) = builtins::from_name(&name) {
+                    return Ok(Expr::BuiltinFnCall { function, args });
+                }
+
                 Ok(Expr::FnCall { name, args })
             }
             TokenKind::ParenOpen => {

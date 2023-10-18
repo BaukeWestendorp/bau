@@ -1,9 +1,14 @@
+use crate::builtins::BuiltinFunction;
 use crate::tokenizer::token::TokenKind;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Expr {
     Literal(Literal),
     Ident(String),
+    BuiltinFnCall {
+        function: BuiltinFunction,
+        args: Vec<Expr>,
+    },
     FnCall {
         name: String,
         args: Vec<Expr>,

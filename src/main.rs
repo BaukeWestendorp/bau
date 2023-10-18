@@ -1,6 +1,7 @@
 use crate::tokenizer::source::Source;
 use clap::Parser;
 
+pub mod builtins;
 pub mod error;
 pub mod interpreter;
 pub mod parser;

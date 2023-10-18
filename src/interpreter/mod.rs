@@ -1,3 +1,4 @@
+use crate::builtins::BUILTIN_FUNCTIONS;
 use crate::error::{BauError, BauResult};
 use crate::parser::ast::Item;
 use std::collections::HashMap;
@@ -11,20 +12,13 @@ pub struct Interpreter {
 }
 
 const MAIN_FUNCTION_NAME: &str = "main";
-const PRINT_FUNCTION_NAME: &str = "print";
 
 impl Interpreter {
     pub fn new() -> Self {
         let mut functions = HashMap::new();
-
-        let print_function = Item::Function {
-            name: PRINT_FUNCTION_NAME.to_string(),
-            parameters: vec!["value".to_string()],
-            body: vec![],
-        };
-
-        functions.insert(PRINT_FUNCTION_NAME.to_string(), print_function);
-
+        for builtin in BUILTIN_FUNCTIONS.iter() {
+            functions.insert(builtin.name(), builtin.function.clone());
+        }
         Self { functions }
     }
 

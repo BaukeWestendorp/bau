@@ -1,7 +1,6 @@
 use crate::error::{BauError, BauResult};
 use crate::interpreter::value::Value;
 use crate::interpreter::Interpreter;
-use crate::interpreter::PRINT_FUNCTION_NAME;
 use crate::parser::ast::{Expr, Item, Literal, Stmt};
 
 impl Interpreter {
@@ -14,30 +13,10 @@ impl Interpreter {
         Ok(())
     }
 
-    pub fn execute_function(
-        &mut self,
-        function: &Item,
-        args: &Vec<Expr>,
-    ) -> BauResult<Option<Value>> {
+    pub fn execute_function(&mut self, function: &Item, _args: &Vec<Expr>) -> BauResult<Value> {
         match function {
-            Item::Function { name, body, .. } => {
-                match name.as_str() {
-                    PRINT_FUNCTION_NAME => {
-                        let value = match self.execute_expression(&args[0])? {
-                            Some(value) => value,
-                            None => {
-                                return Err(BauError::ExecutionError {
-                                    message: "Expected value to print".to_string(),
-                                })
-                            }
-                        };
-                        println!("{:?}", value);
-                        return Ok(None);
-                    }
-                    _ => {}
-                }
-
-                let mut last_result = Ok(None);
+            Item::Function { body, .. } => {
+                let mut last_result = Ok(Value::none());
                 for statement in body {
                     last_result = self.execute_statement(statement);
                     if last_result.is_err() {
@@ -49,7 +28,7 @@ impl Interpreter {
         }
     }
 
-    pub fn execute_statement(&mut self, statement: &Stmt) -> BauResult<Option<Value>> {
+    pub fn execute_statement(&mut self, statement: &Stmt) -> BauResult<Value> {
         match statement {
             Stmt::Return { .. } => self.execute_return_statement(statement),
             Stmt::Let { .. } => todo!("Implement Let statement expression"),
@@ -60,12 +39,12 @@ impl Interpreter {
         }
     }
 
-    pub fn execute_return_statement(&mut self, statement: &Stmt) -> BauResult<Option<Value>> {
+    pub fn execute_return_statement(&mut self, statement: &Stmt) -> BauResult<Value> {
         match statement {
             Stmt::Return { expr } => {
                 let value = match expr {
                     Some(value) => value,
-                    None => return Ok(None),
+                    None => return Ok(Value::none()),
                 };
                 let value = self.execute_expression(value)?;
                 Ok(value)
@@ -76,7 +55,7 @@ impl Interpreter {
         }
     }
 
-    pub fn execute_expression_statement(&mut self, expression: &Stmt) -> BauResult<Option<Value>> {
+    pub fn execute_expression_statement(&mut self, expression: &Stmt) -> BauResult<Value> {
         match expression {
             Stmt::Expression { expr } => self.execute_expression(expr),
             _ => Err(BauError::ExecutionError {
@@ -85,14 +64,15 @@ impl Interpreter {
         }
     }
 
-    pub fn execute_expression(&mut self, expression: &Expr) -> BauResult<Option<Value>> {
+    pub fn execute_expression(&mut self, expression: &Expr) -> BauResult<Value> {
         match expression {
-            Expr::Literal(literal) => self.execute_literal_expression(literal).map(Some),
+            Expr::Literal(literal) => self.execute_literal_expression(literal),
             Expr::Ident(_) => todo!("Implement Ident expression execution"),
             Expr::FnCall { .. } => self.execute_function_call_expression(expression),
             Expr::PrefixOp { .. } => todo!("Implement PrefixOp expression execution"),
             Expr::InfixOp { .. } => todo!("Implement InfixOp expression execution"),
             Expr::PostfixOp { .. } => todo!("Implement PostfixOp expression execution"),
+            Expr::BuiltinFnCall { function, args } => function.call(self, args),
         }
     }
 
@@ -105,10 +85,7 @@ impl Interpreter {
         }
     }
 
-    pub fn execute_function_call_expression(
-        &mut self,
-        function_call: &Expr,
-    ) -> BauResult<Option<Value>> {
+    pub fn execute_function_call_expression(&mut self, function_call: &Expr) -> BauResult<Value> {
         match function_call {
             Expr::FnCall { name, args } => {
                 let function = match self.functions.get(name) {

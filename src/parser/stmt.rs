@@ -19,13 +19,7 @@ where
 
     pub fn parse_let_statement(&mut self) -> BauResult<Stmt> {
         self.consume(TokenKind::Let)?;
-        let ident = self.next().expect("Expected identifier after `let`");
-        assert_eq!(
-            ident.kind,
-            TokenKind::Identifier,
-            "Expected identifier after `let`, but found `{:?}`",
-            ident.kind
-        );
+        let ident = self.consume(TokenKind::Identifier)?;
         let name = self.text(ident).to_string();
         self.consume(TokenKind::Equals)?;
         let value = self.parse_expression()?;

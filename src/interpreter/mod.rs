@@ -1,5 +1,6 @@
 use crate::builtins::BUILTIN_FUNCTIONS;
-use crate::error::{BauError, BauResult};
+use crate::error::BauResult;
+use crate::execution_error;
 use crate::parser::ast::Item;
 use std::collections::HashMap;
 
@@ -25,9 +26,7 @@ impl Interpreter {
     pub fn main_function(&mut self) -> BauResult<&Item> {
         match self.functions.get(MAIN_FUNCTION_NAME) {
             Some(main) => Ok(main),
-            None => Err(BauError::ExecutionError {
-                message: "No main function found".to_string(),
-            }),
+            None => execution_error!("No main function found"),
         }
     }
 }

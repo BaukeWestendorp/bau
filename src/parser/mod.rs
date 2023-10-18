@@ -89,19 +89,19 @@ where
     }
 
     /// Progress the iterator by one token and check if it is of a certain kind.
-    pub(crate) fn consume(&mut self, expected: TokenKind) -> BauResult<()> {
-        let current = self.peek();
+    pub(crate) fn consume(&mut self, expected: TokenKind) -> BauResult<Token> {
+        let current = self.peek_token();
 
-        if current == TokenKind::Error {
+        if current.kind == TokenKind::Error {
             return Err(self.error(format!("Invalid token: {:?}", current)));
         }
 
-        if current != expected {
+        if current.kind != expected {
             return Err(self.error(format!("Expected {:?}, found {:?}", expected, current)));
         }
 
         match self.next() {
-            Some(_) => Ok(()),
+            Some(_) => Ok(current),
             None => Err(self.error(format!("Expected {:?}, found EOF", expected))),
         }
     }

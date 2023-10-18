@@ -1,6 +1,34 @@
 use crate::tokenizer::source::Source;
 use crate::tokenizer::token::Token;
 
+#[macro_export]
+macro_rules! execution_error {
+    ($($message:tt)*) => {
+        Err(crate::error::BauError::ExecutionError {
+            message: format!($($message)*),
+        })
+    };
+}
+
+#[macro_export]
+macro_rules! interpreter_error {
+    ($($message:tt)*) => {
+        Err(crate::error::BauError::ExecutionError {
+            message: format!($($message)*),
+        })
+    };
+}
+
+#[macro_export]
+macro_rules! parser_error {
+    ($token:expr, $($message:tt)*) => {
+        Err(crate::error::BauError::ParserError {
+            token: $token,
+            message: format!($($message)*),
+        })
+    };
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum BauError {
     ParserError { token: Token, message: String },
@@ -43,10 +71,13 @@ impl BauError {
                 }
             }
             BauError::InterpreterError { message } => {
+                eprint!("\x1b[31m"); // RED
                 eprintln!("Error: {}", message);
             }
             BauError::ExecutionError { message } => {
+                eprint!("\x1b[31m"); // RED
                 eprintln!("Error: {}", message);
+                eprint!("\x1b[0m"); // RESET
             }
         }
     }

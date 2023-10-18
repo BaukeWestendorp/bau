@@ -1,4 +1,5 @@
-use crate::error::{BauError, BauResult};
+use crate::error::BauResult;
+use crate::execution_error;
 use crate::interpreter::value::Value;
 use crate::interpreter::Interpreter;
 use crate::parser::ast::{Expr, Item, Literal, Stmt};
@@ -31,10 +32,10 @@ impl Interpreter {
     pub fn execute_statement(&mut self, statement: &Stmt) -> BauResult<Value> {
         match statement {
             Stmt::Return { .. } => self.execute_return_statement(statement),
-            Stmt::Let { .. } => todo!("Implement Let statement expression"),
-            Stmt::Assignment { .. } => todo!("Implement Assignment statement expression"),
-            Stmt::If { .. } => todo!("Implement If statement expression"),
-            Stmt::Block { .. } => todo!("Implement Block statement expression"),
+            Stmt::Let { .. } => execution_error!("Let statement not implemented"),
+            Stmt::Assignment { .. } => execution_error!("Assignment statement not implemented"),
+            Stmt::If { .. } => execution_error!("If statement not implemented"),
+            Stmt::Block { .. } => execution_error!("Block statement not implemented"),
             Stmt::Expression { .. } => self.execute_expression_statement(statement),
         }
     }
@@ -49,18 +50,14 @@ impl Interpreter {
                 let value = self.execute_expression(value)?;
                 Ok(value)
             }
-            _ => Err(BauError::ExecutionError {
-                message: "Expected return statement".to_string(),
-            }),
+            _ => execution_error!("Expected return statement"),
         }
     }
 
     pub fn execute_expression_statement(&mut self, expression: &Stmt) -> BauResult<Value> {
         match expression {
             Stmt::Expression { expr } => self.execute_expression(expr),
-            _ => Err(BauError::ExecutionError {
-                message: "Expected expression statement".to_string(),
-            }),
+            _ => execution_error!("Expected expression statement"),
         }
     }
 
@@ -90,19 +87,13 @@ impl Interpreter {
             Expr::FnCall { name, args } => {
                 let function = match self.functions.get(name) {
                     Some(function) => function.clone(),
-                    None => {
-                        return Err(BauError::ExecutionError {
-                            message: format!("No function found with name: {}", name),
-                        })
-                    }
+                    None => return execution_error!("No function found with name: {}", name),
                 };
 
                 let value = self.execute_function(&function, args)?;
                 return Ok(value);
             }
-            _ => Err(BauError::ExecutionError {
-                message: "Expected function call expression".to_string(),
-            }),
+            _ => execution_error!("Expected function call expression"),
         }
     }
 }

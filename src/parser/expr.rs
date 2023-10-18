@@ -13,7 +13,7 @@ where
             TokenKind::Error => {
                 let error_token = self.next().expect("Expected Error");
                 let text = self.text(error_token);
-                panic!("Error while parsing expression at: {}", text);
+                return Err(self.error(format!("Error while parsing expression at: {}", text)));
             }
             TokenKind::IntLiteral | TokenKind::FloatLiteral | TokenKind::StringLiteral => {
                 self.parse_literal_expression()
@@ -56,7 +56,9 @@ where
             TokenKind::Plus | TokenKind::Minus | TokenKind::ExclamationMark => {
                 self.parse_prefix_operator_expression()
             }
-            kind => panic!("Invalid start of expression: {:?}", kind),
+            invalid_kind => {
+                Err(self.error(format!("Invalid start of expression: `{:?}`", invalid_kind)))
+            }
         }
     }
 

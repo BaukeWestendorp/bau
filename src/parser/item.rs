@@ -25,33 +25,20 @@ where
 
     pub fn parse_function_item(&mut self) -> BauResult<Item> {
         self.consume(TokenKind::Fn)?;
-        let ident = self.next().expect("Expected identifier after `fn`");
-        assert_eq!(
-            ident.kind,
-            TokenKind::Identifier,
-            "Expected identifier after `fn`, but found `{:?}`",
-            ident.kind
-        );
+        let ident = self.consume(TokenKind::Identifier)?;
         let name = self.text(ident).to_string();
 
         self.consume(TokenKind::ParenOpen)?;
         let mut parameters = vec![];
         while !self.at(TokenKind::ParenClose) {
-            let param = self.next().expect("Expected identifier as parameter");
-            assert_eq!(
-                param.kind,
-                TokenKind::Identifier,
-                "Expected identifier as parameter, but found `{:?}`",
-                param.kind
-            );
-            let name = self.text(param).to_string();
+            let param_ident = self.consume(TokenKind::Identifier)?;
+            let name = self.text(param_ident).to_string();
             parameters.push(name);
         }
         self.consume(TokenKind::ParenClose)?;
-        assert!(
-            self.at(TokenKind::BraceOpen),
-            "Expected `{{` after function declaration"
-        );
+        if !self.at(TokenKind::BraceOpen) {
+            return Err(self.error("Expected `{` after function declaration".to_string()));
+        }
         let body = match self.parse_statement()? {
             Stmt::Block { statements } => statements,
             _ => unreachable!(),

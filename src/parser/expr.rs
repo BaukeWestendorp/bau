@@ -14,26 +14,8 @@ where
                 let text = self.text(error_token);
                 panic!("Error while parsing expression at: {}", text);
             }
-            literal @ (TokenKind::IntLiteral
-            | TokenKind::FloatLiteral
-            | TokenKind::StringLiteral) => {
-                let text = {
-                    let token = self.next().expect("Expected literal");
-                    self.text(token)
-                };
-                let literal = match literal {
-                    TokenKind::IntLiteral => Literal::Int(
-                        text.parse()
-                            .expect(&format!("Invalid integer literal: {}", text)),
-                    ),
-                    TokenKind::FloatLiteral => Literal::Float(
-                        text.parse()
-                            .expect(&format!("Invalid float literal: {}", text)),
-                    ),
-                    TokenKind::StringLiteral => Literal::String(text.to_string()),
-                    _ => unreachable!(),
-                };
-                Ok(Expr::Literal(literal))
+            TokenKind::IntLiteral | TokenKind::FloatLiteral | TokenKind::StringLiteral => {
+                self.parse_literal_expression()
             }
             TokenKind::Identifier => {
                 let name = {
@@ -65,15 +47,40 @@ where
                 self.consume(TokenKind::ParenClose)?;
                 expr
             }
-            op @ (TokenKind::Plus | TokenKind::Minus | TokenKind::ExclamationMark) => {
-                self.consume(op)?;
-                let expr = self.parse_expression()?;
-                Ok(Expr::PrefixOp {
-                    op,
-                    expr: Box::new(expr),
-                })
+            TokenKind::Plus | TokenKind::Minus | TokenKind::ExclamationMark => {
+                self.parse_prefix_operator_expression()
             }
             kind => panic!("Invalid start of expression: {:?}", kind),
         }
+    }
+
+    pub fn parse_literal_expression(&mut self) -> BauResult<Expr> {
+        let literal = self.peek();
+        let text = {
+            let token = self.next().expect("Expected literal");
+            self.text(token)
+        };
+        let literal = match literal {
+            TokenKind::IntLiteral => Literal::Int(
+                text.parse()
+                    .expect(&format!("Invalid integer literal: {}", text)),
+            ),
+            TokenKind::FloatLiteral => Literal::Float(
+                text.parse()
+                    .expect(&format!("Invalid float literal: {}", text)),
+            ),
+            TokenKind::StringLiteral => Literal::String(text.to_string()),
+            _ => unreachable!(),
+        };
+        Ok(Expr::Literal(literal))
+    }
+
+    pub fn parse_prefix_operator_expression(&mut self) -> BauResult<Expr> {
+        let op = self.next().expect("Expected operator").kind;
+        let expr = self.parse_expression()?;
+        Ok(Expr::PrefixOp {
+            op,
+            expr: Box::new(expr),
+        })
     }
 }

@@ -17,62 +17,6 @@ where
         Ok(items)
     }
 
-    pub fn parse_statement(&mut self) -> BauResult<Stmt> {
-        match self.peek() {
-            TokenKind::Let => {
-                self.consume(TokenKind::Let)?;
-                let ident = self.next().expect("Expected identifier after `let`");
-                assert_eq!(
-                    ident.kind,
-                    TokenKind::Identifier,
-                    "Expected identifier after `let`, but found `{:?}`",
-                    ident.kind
-                );
-                let name = self.text(ident).to_string();
-                self.consume(TokenKind::Equals)?;
-                let value = self.parse_expression()?;
-                self.consume(TokenKind::Semicolon)?;
-                Ok(Stmt::Let {
-                    name,
-                    value: Box::new(value),
-                })
-            }
-            TokenKind::If => todo!("Implement if statement"),
-            TokenKind::Return => {
-                self.consume(TokenKind::Return)?;
-                let value = self.parse_expression()?;
-                self.consume(TokenKind::Semicolon)?;
-                Ok(Stmt::Return {
-                    value: Box::new(value),
-                })
-            }
-            TokenKind::BraceOpen => {
-                self.consume(TokenKind::BraceOpen)?;
-                let mut statements = vec![];
-                while !self.at(TokenKind::BraceClose) {
-                    let statement = self.parse_statement()?;
-                    statements.push(statement);
-                }
-                self.consume(TokenKind::BraceClose)?;
-                Ok(Stmt::Block { statements })
-            }
-            TokenKind::Identifier => {
-                let ident = self.next().unwrap();
-                let name = self.text(ident).to_string();
-                self.consume(TokenKind::Equals)?;
-                let value = self.parse_expression()?;
-                self.consume(TokenKind::Semicolon)?;
-                Ok(Stmt::Assignment {
-                    name,
-                    value: Box::new(value),
-                })
-            }
-            unknown => Err(self.error(format!(
-                "Unexpected token while parsing statement: `{unknown:?}`"
-            ))),
-        }
-    }
-
     pub fn parse_type(&mut self) -> BauResult<Type> {
         let ident = match self.next() {
             Some(ident) => ident,
@@ -122,5 +66,69 @@ where
 
             unknown => Err(self.error(format!("Unexpected token: `{:?}`", unknown))),
         }
+    }
+
+    pub fn parse_statement(&mut self) -> BauResult<Stmt> {
+        match self.peek() {
+            TokenKind::Let => self.parse_let_statement(),
+            TokenKind::If => todo!("Implement if statement"),
+            TokenKind::Return => self.parse_return_statement(),
+            TokenKind::BraceOpen => self.parse_block_statement(),
+            TokenKind::Identifier => self.parse_identifier_statement(),
+            unknown => Err(self.error(format!(
+                "Unexpected token while parsing statement: `{unknown:?}`"
+            ))),
+        }
+    }
+
+    pub fn parse_let_statement(&mut self) -> BauResult<Stmt> {
+        self.consume(TokenKind::Let)?;
+        let ident = self.next().expect("Expected identifier after `let`");
+        assert_eq!(
+            ident.kind,
+            TokenKind::Identifier,
+            "Expected identifier after `let`, but found `{:?}`",
+            ident.kind
+        );
+        let name = self.text(ident).to_string();
+        self.consume(TokenKind::Equals)?;
+        let value = self.parse_expression()?;
+        self.consume(TokenKind::Semicolon)?;
+        Ok(Stmt::Let {
+            name,
+            value: Box::new(value),
+        })
+    }
+
+    pub fn parse_return_statement(&mut self) -> BauResult<Stmt> {
+        self.consume(TokenKind::Return)?;
+        let value = self.parse_expression()?;
+        self.consume(TokenKind::Semicolon)?;
+        Ok(Stmt::Return {
+            value: Box::new(value),
+        })
+    }
+
+    pub fn parse_block_statement(&mut self) -> BauResult<Stmt> {
+        self.consume(TokenKind::BraceOpen)?;
+        let mut statements = vec![];
+        while !self.at(TokenKind::BraceClose) {
+            let statement = self.parse_statement()?;
+            statements.push(statement);
+        }
+        self.consume(TokenKind::BraceClose)?;
+        Ok(Stmt::Block { statements })
+    }
+
+    pub fn parse_identifier_statement(&mut self) -> BauResult<Stmt> {
+        let ident = self.next().unwrap();
+        let name = self.text(ident).to_string();
+        self.consume(TokenKind::Equals)?;
+        let value = self.parse_expression()?;
+        self.consume(TokenKind::Semicolon)?;
+        Ok(Stmt::Assignment {
+            name,
+            value: Box::new(value),
+        })
     }
 }

@@ -1,6 +1,7 @@
 use crate::error::{BauError, BauResult};
 use crate::interpreter::value::Value;
 use crate::interpreter::Interpreter;
+use crate::interpreter::PRINT_FUNCTION_NAME;
 use crate::parser::ast::{Expr, Item, Literal, Stmt};
 
 impl Interpreter {
@@ -21,7 +22,7 @@ impl Interpreter {
         match function {
             Item::Function { name, body, .. } => {
                 match name.as_str() {
-                    "print" => {
+                    PRINT_FUNCTION_NAME => {
                         let value = match self.execute_expression(&args[0])? {
                             Some(value) => value,
                             None => {

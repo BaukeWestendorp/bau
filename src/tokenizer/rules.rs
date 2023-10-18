@@ -15,7 +15,7 @@ fn match_single_char(input: &str, char: char) -> Option<usize> {
         .and_then(|ch| if char == ch { Some(1) } else { None })
 }
 
-fn match_two_chars(input: &str, first: char, second: char) -> Option<usize> {
+fn _match_two_chars(input: &str, first: char, second: char) -> Option<usize> {
     if input.len() >= 2 {
         match_single_char(input, first)
             .and_then(|_| match_single_char(&input[1..], second).map(|_| 2))

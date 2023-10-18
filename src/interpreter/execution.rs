@@ -32,7 +32,7 @@ impl Interpreter {
     pub fn execute_statement(&mut self, statement: &Stmt) -> BauResult<Value> {
         match statement {
             Stmt::Return { .. } => self.execute_return_statement(statement),
-            Stmt::Let { .. } => execution_error!("Let statement not implemented"),
+            Stmt::Let { .. } => self.execute_let_statement(statement),
             Stmt::Assignment { .. } => execution_error!("Assignment statement not implemented"),
             Stmt::If { .. } => execution_error!("If statement not implemented"),
             Stmt::Block { .. } => execution_error!("Block statement not implemented"),
@@ -54,6 +54,17 @@ impl Interpreter {
         }
     }
 
+    pub fn execute_let_statement(&mut self, statement: &Stmt) -> BauResult<Value> {
+        match statement {
+            Stmt::Let { name, expr } => {
+                let initial_value = self.execute_expression(expr)?;
+                self.variables.insert(name.clone(), initial_value);
+                Ok(Value::none())
+            }
+            _ => execution_error!("Expected let statement"),
+        }
+    }
+
     pub fn execute_expression_statement(&mut self, expression: &Stmt) -> BauResult<Value> {
         match expression {
             Stmt::Expression { expr } => self.execute_expression(expr),
@@ -64,11 +75,17 @@ impl Interpreter {
     pub fn execute_expression(&mut self, expression: &Expr) -> BauResult<Value> {
         match expression {
             Expr::Literal(literal) => self.execute_literal_expression(literal),
-            Expr::Ident(_) => todo!("Implement Ident expression execution"),
+            Expr::Ident(ident) => self.execute_ident_expression(ident),
             Expr::FnCall { .. } => self.execute_function_call_expression(expression),
-            Expr::PrefixOp { .. } => todo!("Implement PrefixOp expression execution"),
-            Expr::InfixOp { .. } => todo!("Implement InfixOp expression execution"),
-            Expr::PostfixOp { .. } => todo!("Implement PostfixOp expression execution"),
+            Expr::PrefixOp { .. } => {
+                execution_error!("PrefixOp expression execution not implemented")
+            }
+            Expr::InfixOp { .. } => {
+                execution_error!("InfixOp expression execution not implemented")
+            }
+            Expr::PostfixOp { .. } => {
+                execution_error!("PostfixOp expression execution not implemented")
+            }
             Expr::BuiltinFnCall { function, args } => function.call(self, args),
         }
     }
@@ -79,6 +96,13 @@ impl Interpreter {
             Literal::Float(value) => Ok(Value::Float(*value)),
             Literal::String(value) => Ok(Value::String(value.clone())),
             Literal::Bool(value) => Ok(Value::Bool(*value)),
+        }
+    }
+
+    pub fn execute_ident_expression(&mut self, ident: &str) -> BauResult<Value> {
+        match self.variables.get(ident) {
+            Some(value) => Ok(value.clone()),
+            None => execution_error!("No variable found with name: {}", ident),
         }
     }
 

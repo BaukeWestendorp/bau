@@ -4,11 +4,11 @@ use crate::parser::ast::Expr;
 pub enum Stmt {
     Let {
         name: String,
-        value: Box<Expr>,
+        expr: Box<Expr>,
     },
     Assignment {
         name: String,
-        value: Box<Expr>,
+        expr: Box<Expr>,
     },
     If {
         condition: Box<Expr>,
@@ -19,6 +19,6 @@ pub enum Stmt {
         statements: Vec<Stmt>,
     },
     Return {
-        value: Box<Expr>,
+        expr: Option<Box<Expr>>,
     },
 }

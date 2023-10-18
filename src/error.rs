@@ -3,13 +3,15 @@ use crate::tokenizer::token::Token;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum BauError {
-    ParseError { token: Token, message: String },
+    ParserError { token: Token, message: String },
+    InterpreterError { message: String },
+    ExecutionError { message: String },
 }
 
 impl BauError {
     pub fn log(&self, file: &str, source: &Source) {
         match self {
-            BauError::ParseError { token, message } => {
+            BauError::ParserError { token, message } => {
                 let (line, column) = source.line_and_column(token.span.start);
 
                 eprintln!("Error at {}:{}:{}", file, line, column);
@@ -39,6 +41,12 @@ impl BauError {
                         eprintln!();
                     }
                 }
+            }
+            BauError::InterpreterError { message } => {
+                eprintln!("Error: {}", message);
+            }
+            BauError::ExecutionError { message } => {
+                eprintln!("Error: {}", message);
             }
         }
     }

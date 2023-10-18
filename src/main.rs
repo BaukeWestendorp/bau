@@ -3,6 +3,7 @@ use crate::tokenizer::source::Source;
 use clap::Parser;
 
 pub mod error;
+pub mod interpreter;
 pub mod parser;
 pub mod tokenizer;
 
@@ -12,7 +13,7 @@ struct Args {
     file_path: String,
 }
 
-fn main() -> BauResult<()> {
+fn main() {
     let args = Args::parse();
 
     let source = match std::fs::read_to_string(&args.file_path) {
@@ -24,16 +25,19 @@ fn main() -> BauResult<()> {
     };
 
     let mut parser = parser::Parser::new(&source);
-    let items = parser.parse_top_level();
+    let top_level = parser.parse_top_level();
 
-    match items {
+    match top_level {
         Err(error) => error.log(args.file_path.as_str(), &source),
-        Ok(items) => {
-            for item in items {
-                println!("{:#?}", item);
+        Ok(top_level) => {
+            let mut interpreter = interpreter::Interpreter::new();
+            match interpreter.evaluate_top_level(top_level) {
+                Err(error) => error.log(args.file_path.as_str(), &source),
+                Ok(_) => match interpreter.execute_main() {
+                    Err(error) => error.log(args.file_path.as_str(), &source),
+                    Ok(_) => {}
+                },
             }
         }
     }
-
-    Ok(())
 }

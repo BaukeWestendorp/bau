@@ -106,8 +106,8 @@ where
         }
     }
 
-    pub(crate) fn error(&mut self, message: String) -> BauError {
-        BauError::ParseError {
+    fn error(&mut self, message: String) -> BauError {
+        BauError::ParserError {
             token: self.peek_token(),
             message,
         }

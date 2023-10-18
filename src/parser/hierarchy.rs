@@ -96,16 +96,23 @@ where
         self.consume(TokenKind::Semicolon)?;
         Ok(Stmt::Let {
             name,
-            value: Box::new(value),
+            expr: Box::new(value),
         })
     }
 
     pub fn parse_return_statement(&mut self) -> BauResult<Stmt> {
         self.consume(TokenKind::Return)?;
+
+        // No return value
+        if self.at(TokenKind::Semicolon) {
+            self.consume(TokenKind::Semicolon)?;
+            return Ok(Stmt::Return { expr: None });
+        }
+
         let value = self.parse_expression()?;
         self.consume(TokenKind::Semicolon)?;
         Ok(Stmt::Return {
-            value: Box::new(value),
+            expr: Some(Box::new(value)),
         })
     }
 
@@ -128,7 +135,7 @@ where
         self.consume(TokenKind::Semicolon)?;
         Ok(Stmt::Assignment {
             name,
-            value: Box::new(value),
+            expr: Box::new(value),
         })
     }
 }

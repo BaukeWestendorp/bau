@@ -1,4 +1,4 @@
-use crate::error::{BauError, BauResult};
+use crate::error::BauResult;
 use crate::interpreter::Interpreter;
 use crate::parser::ast::Item;
 

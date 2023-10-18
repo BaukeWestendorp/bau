@@ -6,7 +6,7 @@ use std::iter::Peekable;
 
 pub mod ast;
 pub mod expr;
-pub mod hierarchy;
+pub mod item;
 pub mod stmt;
 
 pub struct TokenIter<'input> {

@@ -1,4 +1,3 @@
-use crate::error::BauResult;
 use crate::tokenizer::source::Source;
 use clap::Parser;
 

@@ -1,32 +1,41 @@
 use crate::error::{BauError, BauResult};
 use crate::interpreter::value::Value;
 use crate::interpreter::Interpreter;
-use crate::parser::ast::{Expr, Item, Literal};
-use crate::parser::stmt::Stmt;
+use crate::parser::ast::{Expr, Item, Literal, Stmt};
 
 impl Interpreter {
     pub fn execute_main(&mut self) -> BauResult<()> {
         match self.main_function()?.clone() {
             main @ Item::Function { .. } => {
-                let value = self.execute_function(&main)?;
-                println!("main() returned: {:?}", value);
+                self.execute_function(&main, &vec![])?;
             }
         }
         Ok(())
     }
 
-    pub fn main_function(&mut self) -> BauResult<&Item> {
-        match self.functions.get("main") {
-            Some(main) => Ok(main),
-            None => Err(BauError::ExecutionError {
-                message: "No main function found".to_string(),
-            }),
-        }
-    }
-
-    pub fn execute_function(&mut self, function: &Item) -> BauResult<Option<Value>> {
+    pub fn execute_function(
+        &mut self,
+        function: &Item,
+        args: &Vec<Expr>,
+    ) -> BauResult<Option<Value>> {
         match function {
-            Item::Function { body, .. } => {
+            Item::Function { name, body, .. } => {
+                match name.as_str() {
+                    "print" => {
+                        let value = match self.execute_expression(&args[0])? {
+                            Some(value) => value,
+                            None => {
+                                return Err(BauError::ExecutionError {
+                                    message: "Expected value to print".to_string(),
+                                })
+                            }
+                        };
+                        println!("{:?}", value);
+                        return Ok(None);
+                    }
+                    _ => {}
+                }
+
                 let mut last_result = Ok(None);
                 for statement in body {
                     last_result = self.execute_statement(statement);
@@ -46,6 +55,7 @@ impl Interpreter {
             Stmt::Assignment { .. } => todo!("Implement Assignment statement expression"),
             Stmt::If { .. } => todo!("Implement If statement expression"),
             Stmt::Block { .. } => todo!("Implement Block statement expression"),
+            Stmt::Expression { .. } => self.execute_expression_statement(statement),
         }
     }
 
@@ -61,6 +71,15 @@ impl Interpreter {
             }
             _ => Err(BauError::ExecutionError {
                 message: "Expected return statement".to_string(),
+            }),
+        }
+    }
+
+    pub fn execute_expression_statement(&mut self, expression: &Stmt) -> BauResult<Option<Value>> {
+        match expression {
+            Stmt::Expression { expr } => self.execute_expression(expr),
+            _ => Err(BauError::ExecutionError {
+                message: "Expected expression statement".to_string(),
             }),
         }
     }
@@ -90,7 +109,7 @@ impl Interpreter {
         function_call: &Expr,
     ) -> BauResult<Option<Value>> {
         match function_call {
-            Expr::FnCall { name, .. } => {
+            Expr::FnCall { name, args } => {
                 let function = match self.functions.get(name) {
                     Some(function) => function.clone(),
                     None => {
@@ -100,7 +119,7 @@ impl Interpreter {
                     }
                 };
 
-                let value = self.execute_function(&function)?;
+                let value = self.execute_function(&function, args)?;
                 return Ok(value);
             }
             _ => Err(BauError::ExecutionError {

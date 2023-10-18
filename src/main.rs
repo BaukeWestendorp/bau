@@ -1,9 +1,9 @@
-use crate::error::{BauError, BauResult};
+use crate::error::BauResult;
 use clap::Parser;
 
 pub mod error;
-pub mod node;
 pub mod parser;
+pub mod tokenizer;
 
 #[derive(clap::Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -23,26 +23,30 @@ fn main() -> BauResult<()> {
     };
 
     let mut parser = parser::Parser::new(source.as_str());
-    match parser.parse() {
-        Ok(Some(node)) => println!("{:#?}", node),
-        Ok(None) => {}
-        Err(error) => match error {
-            BauError::ParseError {
-                line,
-                column,
-                message,
-            } => {
-                eprintln!("Error at {}:{}:{}", args.file_path, line, column);
-                eprintln!();
+    let items = parser.parse_top_level();
+    eprintln!("{:#?}", items);
 
-                let source_line = source.lines().nth(line - 1).unwrap().replace("\t", "    ");
-                eprint!("\x1b[37m"); // WHITE
-                eprintln!("{}", source_line);
-                eprint!("\x1b[31m"); // RED
-                eprintln!("{: <1$}^ {message}", "", column - 2);
-                eprint!("\x1b[0m"); // RESET
-            }
-        },
-    };
+    // match parser.parse() {
+    //     Ok(Some(node)) => println!("{:#?}", node),
+    //     Ok(None) => {}
+    //     Err(error) => match error {
+    //         BauError::ParseError {
+    //             line,
+    //             column,
+    //             message,
+    //         } => {
+    //             eprintln!("Error at {}:{}:{}", args.file_path, line, column);
+    //             eprintln!();
+    //
+    //             let source_line = source.lines().nth(line - 1).unwrap().replace("\t", "    ");
+    //             eprint!("\x1b[37m"); // WHITE
+    //             eprintln!("{}", source_line);
+    //             eprint!("\x1b[31m"); // RED
+    //             eprintln!("{: <1$}^ {message}", "", column - 2);
+    //             eprint!("\x1b[0m"); // RESET
+    //         }
+    //     },
+    // };
+
     Ok(())
 }

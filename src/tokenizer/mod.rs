@@ -2,6 +2,7 @@ use crate::tokenizer::rules::Rule;
 use crate::tokenizer::token::{Span, Token, TokenKind};
 
 pub mod rules;
+pub mod source;
 pub mod token;
 
 #[derive(Debug, Clone)]
@@ -78,28 +79,6 @@ impl<'input> Tokenizer<'input> {
             '=' => Some(TokenKind::Equals),
             _ => None,
         }
-    }
-
-    fn consume_number(&self, input: &str) -> Option<Token> {
-        let mut remaining = input;
-        let mut number_text = String::new();
-        while !remaining.is_empty() {
-            match remaining
-                .chars()
-                .nth(0)
-                .expect("At least one char should be in the string")
-            {
-                char @ ('-' | '+' | '0'..='9') => {
-                    number_text.push(char);
-                }
-                _ => return None,
-            }
-            remaining = &remaining[1..];
-        }
-        Some(Token {
-            kind: TokenKind::IntLiteral,
-            span: Default::default(),
-        })
     }
 
     fn invalid_token(&mut self, input: &str) -> Token {

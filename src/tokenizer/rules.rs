@@ -68,10 +68,6 @@ pub(crate) fn get_rules() -> Vec<Rule> {
     }
 
     vec![
-        keyword!(Fn, "fn"),
-        keyword!(Let, "let"),
-        keyword!(If, "if"),
-        keyword!(Return, "return"),
         char!(ParenOpen, '('),
         char!(ParenClose, ')'),
         char!(BraceOpen, '{'),
@@ -84,6 +80,10 @@ pub(crate) fn get_rules() -> Vec<Rule> {
         char!(Plus, '+'),
         char!(Minus, '-'),
         char!(ExclamationMark, '!'),
+        keyword!(Let, "let"),
+        keyword!(Fn, "fn"),
+        keyword!(If, "if"),
+        keyword!(Return, "return"),
         regex!(StringLiteral, &STRING_REGEX),
         regex!(FloatLiteral, &FLOAT_REGEX),
         regex!(Identifier, &IDENTIFIER_REGEX),

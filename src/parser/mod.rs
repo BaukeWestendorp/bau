@@ -1,6 +1,7 @@
-use crate::tokenizer::token::{Token, TokenKind};
+use crate::error::{BauError, BauResult};
+use crate::tokenizer::source::Source;
+use crate::tokenizer::token::{Span, Token, TokenKind};
 use crate::tokenizer::Tokenizer;
-use ast::Expr;
 use std::iter::Peekable;
 
 pub mod ast;
@@ -42,16 +43,11 @@ where
 }
 
 impl<'input> Parser<'input, TokenIter<'input>> {
-    pub fn new(input: &'input str) -> Self {
+    pub fn new(source: &'input Source) -> Self {
         Self {
-            input,
-            tokens: TokenIter::new(input).peekable(),
+            input: source.text(),
+            tokens: TokenIter::new(source.text()).peekable(),
         }
-    }
-
-    pub fn parse(&mut self) -> Expr {
-        let expr = self.parse_expression();
-        expr
     }
 }
 
@@ -64,12 +60,22 @@ where
         token.text(&self.input)
     }
 
-    /// Look at the next token without consuming it.
+    /// Look at the next token's kind without consuming it.
     pub(crate) fn peek(&mut self) -> TokenKind {
+        self.peek_token().kind
+    }
+
+    pub(crate) fn peek_token(&mut self) -> Token {
         self.tokens
             .peek()
-            .map(|token| token.kind)
-            .unwrap_or(TokenKind::EndOfFile)
+            .unwrap_or(&Token {
+                kind: TokenKind::EndOfFile,
+                span: Span {
+                    start: self.input.len(),
+                    end: self.input.len(),
+                },
+            })
+            .clone()
     }
 
     /// Check if the next token is of a certain kind.
@@ -83,14 +89,27 @@ where
     }
 
     /// Progress the iterator by one token and check if it is of a certain kind.
-    pub(crate) fn consume(&mut self, expected: TokenKind) {
-        let token = self
-            .next()
-            .expect(&format!("Expected {:?}, found EOF", expected));
-        assert_eq!(
-            token.kind, expected,
-            "Expected {:?}, found {:?}",
-            expected, token.kind
-        );
+    pub(crate) fn consume(&mut self, expected: TokenKind) -> BauResult<()> {
+        let current = self.peek();
+
+        if current == TokenKind::Error {
+            return Err(self.error(format!("Invalid token: {:?}", current)));
+        }
+
+        if current != expected {
+            return Err(self.error(format!("Expected {:?}, found {:?}", expected, current)));
+        }
+
+        match self.next() {
+            Some(_) => Ok(()),
+            None => Err(self.error(format!("Expected {:?}, found EOF", expected))),
+        }
+    }
+
+    pub(crate) fn error(&mut self, message: String) -> BauError {
+        BauError::ParseError {
+            token: self.peek_token(),
+            message,
+        }
     }
 }

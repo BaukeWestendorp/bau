@@ -1,4 +1,5 @@
 use crate::error::BauResult;
+use crate::tokenizer::source::Source;
 use clap::Parser;
 
 pub mod error;
@@ -15,38 +16,24 @@ fn main() -> BauResult<()> {
     let args = Args::parse();
 
     let source = match std::fs::read_to_string(&args.file_path) {
-        Ok(source) => source,
+        Ok(source) => Source::from(source),
         Err(_) => {
             eprintln!("Could not find file '{}'", args.file_path);
             std::process::exit(1);
         }
     };
 
-    let mut parser = parser::Parser::new(source.as_str());
+    let mut parser = parser::Parser::new(&source);
     let items = parser.parse_top_level();
-    eprintln!("{:#?}", items);
 
-    // match parser.parse() {
-    //     Ok(Some(node)) => println!("{:#?}", node),
-    //     Ok(None) => {}
-    //     Err(error) => match error {
-    //         BauError::ParseError {
-    //             line,
-    //             column,
-    //             message,
-    //         } => {
-    //             eprintln!("Error at {}:{}:{}", args.file_path, line, column);
-    //             eprintln!();
-    //
-    //             let source_line = source.lines().nth(line - 1).unwrap().replace("\t", "    ");
-    //             eprint!("\x1b[37m"); // WHITE
-    //             eprintln!("{}", source_line);
-    //             eprint!("\x1b[31m"); // RED
-    //             eprintln!("{: <1$}^ {message}", "", column - 2);
-    //             eprint!("\x1b[0m"); // RESET
-    //         }
-    //     },
-    // };
+    match items {
+        Err(error) => error.log(args.file_path.as_str(), &source),
+        Ok(items) => {
+            for item in items {
+                println!("{:#?}", item);
+            }
+        }
+    }
 
     Ok(())
 }

@@ -1,3 +1,4 @@
+use crate::error::BauResult;
 use crate::parser::ast::{Expr, Literal};
 use crate::parser::Parser;
 use crate::tokenizer::token::{Token, TokenKind};
@@ -6,7 +7,7 @@ impl<'input, I> Parser<'input, I>
 where
     I: Iterator<Item = Token>,
 {
-    pub fn parse_expression(&mut self) -> Expr {
+    pub fn parse_expression(&mut self) -> BauResult<Expr> {
         match self.peek() {
             TokenKind::Error => {
                 let error_token = self.next().expect("Expected Error");
@@ -32,7 +33,7 @@ where
                     TokenKind::StringLiteral => Literal::String(text.to_string()),
                     _ => unreachable!(),
                 };
-                Expr::Literal(literal)
+                Ok(Expr::Literal(literal))
             }
             TokenKind::Identifier => {
                 let name = {
@@ -42,35 +43,35 @@ where
 
                 // Plain identifier
                 if !self.at(TokenKind::ParenOpen) {
-                    return Expr::Ident(name);
+                    return Ok(Expr::Ident(name));
                 }
 
                 // Function call
                 let mut args = vec![];
-                self.consume(TokenKind::ParenOpen);
+                self.consume(TokenKind::ParenOpen)?;
                 while !self.at(TokenKind::ParenClose) {
-                    let arg = self.parse_expression();
+                    let arg = self.parse_expression()?;
                     args.push(arg);
                     if self.at(TokenKind::Comma) {
-                        self.consume(TokenKind::Comma);
+                        self.consume(TokenKind::Comma)?;
                     }
                 }
-                self.consume(TokenKind::ParenClose);
-                Expr::FnCall { name, args }
+                self.consume(TokenKind::ParenClose)?;
+                Ok(Expr::FnCall { name, args })
             }
             TokenKind::ParenOpen => {
-                self.consume(TokenKind::ParenOpen);
+                self.consume(TokenKind::ParenOpen)?;
                 let expr = self.parse_expression();
-                self.consume(TokenKind::ParenClose);
+                self.consume(TokenKind::ParenClose)?;
                 expr
             }
             op @ (TokenKind::Plus | TokenKind::Minus | TokenKind::ExclamationMark) => {
-                self.consume(op);
-                let expr = self.parse_expression();
-                Expr::PrefixOp {
+                self.consume(op)?;
+                let expr = self.parse_expression()?;
+                Ok(Expr::PrefixOp {
                     op,
                     expr: Box::new(expr),
-                }
+                })
             }
             kind => panic!("Invalid start of expression: {:?}", kind),
         }

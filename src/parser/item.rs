@@ -1,5 +1,5 @@
 use crate::error::BauResult;
-use crate::parser::ast::{Item, Stmt};
+use crate::parser::ast::Item;
 use crate::parser::Parser;
 use crate::tokenizer::token::TokenKind;
 

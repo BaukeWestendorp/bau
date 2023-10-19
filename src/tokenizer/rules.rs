@@ -15,7 +15,7 @@ fn match_single_char(input: &str, char: char) -> Option<usize> {
         .and_then(|ch| if char == ch { Some(1) } else { None })
 }
 
-fn _match_two_chars(input: &str, first: char, second: char) -> Option<usize> {
+fn match_two_chars(input: &str, first: char, second: char) -> Option<usize> {
     if input.len() >= 2 {
         match_single_char(input, first)
             .and_then(|_| match_single_char(&input[1..], second).map(|_| 2))
@@ -52,6 +52,21 @@ pub(crate) fn get_rules() -> Vec<Rule> {
         };
     }
 
+    macro_rules! two_chars {
+        ($token:expr) => {
+            Rule {
+                kind: $token,
+                matches: |input| {
+                    match_two_chars(
+                        input,
+                        $token.to_string().chars().nth(0).unwrap(),
+                        $token.to_string().chars().nth(1).unwrap(),
+                    )
+                },
+            }
+        };
+    }
+
     macro_rules! keyword {
         ($token:expr) => {
             Rule {
@@ -71,18 +86,16 @@ pub(crate) fn get_rules() -> Vec<Rule> {
     }
 
     vec![
-        char!(TokenKind::ParenOpen),
-        char!(TokenKind::ParenClose),
-        char!(TokenKind::BraceOpen),
-        char!(TokenKind::BraceClose),
-        char!(TokenKind::SquareOpen),
-        char!(TokenKind::SquareClose),
-        char!(TokenKind::Semicolon),
-        char!(TokenKind::Comma),
-        char!(TokenKind::Equals),
-        char!(TokenKind::Plus),
-        char!(TokenKind::Minus),
         char!(TokenKind::ExclamationMark),
+        char!(TokenKind::Equals),
+        char!(TokenKind::LessThan),
+        char!(TokenKind::GreaterThan),
+        two_chars!(TokenKind::EqualsEquals),
+        two_chars!(TokenKind::ExclamationMarkEquals),
+        two_chars!(TokenKind::AmpersandAmpersand),
+        two_chars!(TokenKind::PipePipe),
+        two_chars!(TokenKind::LessThanEquals),
+        two_chars!(TokenKind::GreaterThanEquals),
         keyword!(TokenKind::Let),
         keyword!(TokenKind::Fn),
         keyword!(TokenKind::If),

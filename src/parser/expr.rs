@@ -20,6 +20,13 @@ impl Operator for TokenKind {
 
     fn infix_binding_power(&self) -> Option<(u8, u8)> {
         match self {
+            TokenKind::PipePipe => Some((1, 2)),
+            TokenKind::AmpersandAmpersand => Some((3, 4)),
+            TokenKind::EqualsEquals | TokenKind::ExclamationMarkEquals => Some((5, 6)),
+            TokenKind::LessThan
+            | TokenKind::LessThanEquals
+            | TokenKind::GreaterThan
+            | TokenKind::GreaterThanEquals => Some((7, 8)),
             TokenKind::Plus | TokenKind::Minus => Some((9, 10)),
             TokenKind::Asterisk | TokenKind::Slash => Some((11, 12)),
             _ => None,
@@ -44,7 +51,15 @@ impl Parser<'_> {
                 op @ (TokenKind::Plus
                 | TokenKind::Minus
                 | TokenKind::Asterisk
-                | TokenKind::Slash) => op,
+                | TokenKind::Slash
+                | TokenKind::EqualsEquals
+                | TokenKind::ExclamationMarkEquals
+                | TokenKind::LessThan
+                | TokenKind::LessThanEquals
+                | TokenKind::GreaterThan
+                | TokenKind::GreaterThanEquals
+                | TokenKind::AmpersandAmpersand
+                | TokenKind::PipePipe) => op,
                 _ => break,
             };
 

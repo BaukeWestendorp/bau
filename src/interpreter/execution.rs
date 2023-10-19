@@ -81,12 +81,12 @@ impl Interpreter {
             } => {
                 let condition = self.execute_expression(condition)?;
                 match condition {
-                    Value::Int(1) => self.execute_statement(then_branch),
-                    Value::Int(0) => match else_branch {
+                    Value::Bool(true) => self.execute_statement(then_branch),
+                    Value::Bool(false) => match else_branch {
                         Some(else_branch) => self.execute_statement(else_branch),
                         None => Ok(Value::none()),
                     },
-                    _ => execution_error!("Expected boolean condition"),
+                    _ => execution_error!("Expected boolean condition, found: `{}`", condition),
                 }
             }
             _ => panic!("Expected if statement"),
@@ -229,6 +229,44 @@ impl Interpreter {
                         (Value::Int(left), Value::Int(right)) => Ok(Value::Int(left / right)),
                         (Value::Float(left), Value::Float(right)) => Ok(Value::Float(left / right)),
                         _ => execution_error!("Division is only available between ints and floats"),
+                    },
+                    TokenKind::EqualsEquals => Ok(Value::Bool(left == right)),
+                    TokenKind::ExclamationMarkEquals => Ok(Value::Bool(left != right)),
+                    TokenKind::LessThan => match (left, right) {
+                        (Value::Int(left), Value::Int(right)) => Ok(Value::Bool(left < right)),
+                        (Value::Float(left), Value::Float(right)) => Ok(Value::Bool(left < right)),
+                        _ => {
+                            execution_error!("Less than is only available between ints and floats")
+                        }
+                    },
+                    TokenKind::LessThanEquals => match (left, right) {
+                        (Value::Int(left), Value::Int(right)) => Ok(Value::Bool(left <= right)),
+                        (Value::Float(left), Value::Float(right)) => Ok(Value::Bool(left <= right)),
+                        _ => execution_error!(
+                            "Less than or equals is only available between ints and floats"
+                        ),
+                    },
+                    TokenKind::GreaterThan => match (left, right) {
+                        (Value::Int(left), Value::Int(right)) => Ok(Value::Bool(left > right)),
+                        (Value::Float(left), Value::Float(right)) => Ok(Value::Bool(left > right)),
+                        _ => execution_error!(
+                            "Greater than is only available between ints and floats"
+                        ),
+                    },
+                    TokenKind::GreaterThanEquals => match (left, right) {
+                        (Value::Int(left), Value::Int(right)) => Ok(Value::Bool(left >= right)),
+                        (Value::Float(left), Value::Float(right)) => Ok(Value::Bool(left >= right)),
+                        _ => execution_error!(
+                            "Greater than or equals is only available between ints and floats"
+                        ),
+                    },
+                    TokenKind::AmpersandAmpersand => match (left, right) {
+                        (Value::Bool(left), Value::Bool(right)) => Ok(Value::Bool(left && right)),
+                        _ => execution_error!("Logical and is only available between bools"),
+                    },
+                    TokenKind::PipePipe => match (left, right) {
+                        (Value::Bool(left), Value::Bool(right)) => Ok(Value::Bool(left || right)),
+                        _ => execution_error!("Logical or is only available between bools"),
                     },
                     _ => execution_error!("Invalid infix operator: `{}`", op),
                 }

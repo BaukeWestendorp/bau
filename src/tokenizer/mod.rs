@@ -75,13 +75,11 @@ impl<'input> Tokenizer<'input> {
             '[' => Some(TokenKind::SquareOpen),
             ']' => Some(TokenKind::SquareClose),
             ';' => Some(TokenKind::Semicolon),
-            '=' => Some(TokenKind::Equals),
             ',' => Some(TokenKind::Comma),
             '+' => Some(TokenKind::Plus),
             '-' => Some(TokenKind::Minus),
             '*' => Some(TokenKind::Asterisk),
             '/' => Some(TokenKind::Slash),
-            '!' => Some(TokenKind::ExclamationMark),
             _ => None,
         }
     }

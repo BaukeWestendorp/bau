@@ -42,8 +42,8 @@ impl<'source> Parser<'source> {
     }
 
     /// Look at the token's kind after the next token without consuming it.
-    pub(crate) fn peek_next_kind(&mut self) -> TokenKind {
-        self.peek_next().kind
+    pub(crate) fn peek_offset_kind(&mut self, offset: isize) -> TokenKind {
+        self.peek_offset(offset).kind
     }
 
     /// Look at the next token without consuming it.
@@ -55,9 +55,14 @@ impl<'source> Parser<'source> {
     }
 
     /// Look at the token after the next token without consuming it.
-    pub(crate) fn peek_next(&mut self) -> Token {
+    pub(crate) fn peek_offset(&mut self, offset: isize) -> Token {
+        let offset = if self.cursor.saturating_add_signed(offset) > self.tokens.len() {
+            self.tokens.len() - 1
+        } else {
+            self.cursor + offset as usize
+        };
         self.tokens
-            .get(self.cursor + 1)
+            .get(offset)
             .unwrap_or(&self.source.eof_token())
             .clone()
     }

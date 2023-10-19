@@ -12,7 +12,7 @@ impl Parser<'_> {
             TokenKind::Loop => self.parse_loop_statement(),
             TokenKind::BraceOpen => self.parse_block_statement(),
             TokenKind::Identifier => {
-                let next = self.peek_next_kind();
+                let next = self.peek_offset_kind(1);
                 match next {
                     TokenKind::Equals => self.parse_assignment_statement(),
                     _ => self.parse_expression_statement(),

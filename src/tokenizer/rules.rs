@@ -34,6 +34,7 @@ fn match_regex(input: &str, r: &Regex) -> Option<usize> {
 
 lazy_static! {
     static ref STRING_REGEX: Regex = Regex::new(r#"^"((\\"|\\\\)|[^\\"])*""#).unwrap();
+    static ref INT_REGEX: Regex = Regex::new(r#"^[+-]?\d+"#).unwrap();
     static ref FLOAT_REGEX: Regex =
         Regex::new(r#"^((\d+(\.\d+)?)|(\.\d+))([Ee](\+|-)?\d+)?"#).unwrap();
     static ref IDENTIFIER_REGEX: Regex = Regex::new(r##"^([A-Za-z]|_)([A-Za-z]|_|\d)*"##).unwrap();
@@ -85,9 +86,11 @@ pub(crate) fn get_rules() -> Vec<Rule> {
         keyword!(TokenKind::Let),
         keyword!(TokenKind::Fn),
         keyword!(TokenKind::If),
+        keyword!(TokenKind::Else),
         keyword!(TokenKind::Return),
         keyword!(TokenKind::Loop),
         regex!(TokenKind::StringLiteral, &STRING_REGEX),
+        regex!(TokenKind::IntLiteral, &INT_REGEX),
         regex!(TokenKind::FloatLiteral, &FLOAT_REGEX),
         regex!(TokenKind::Identifier, &IDENTIFIER_REGEX),
     ]

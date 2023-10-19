@@ -7,7 +7,7 @@ impl Parser<'_> {
     pub fn parse_statement(&mut self) -> BauResult<Stmt> {
         match self.peek_kind() {
             TokenKind::Let => self.parse_let_statement(),
-            TokenKind::If => todo!("Implement if statement"),
+            TokenKind::If => self.parse_if_statement(),
             TokenKind::Return => self.parse_return_statement(),
             TokenKind::Loop => self.parse_loop_statement(),
             TokenKind::BraceOpen => self.parse_block_statement(),
@@ -32,6 +32,23 @@ impl Parser<'_> {
         Ok(Stmt::Let {
             name,
             expr: Box::new(value),
+        })
+    }
+
+    pub fn parse_if_statement(&mut self) -> BauResult<Stmt> {
+        self.consume_specific(TokenKind::If)?;
+        let condition = self.parse_expression()?;
+        let then_branch = self.parse_block_statement()?;
+        let else_branch = if self.at(TokenKind::Else) {
+            self.consume_specific(TokenKind::Else)?;
+            Some(Box::new(self.parse_block_statement()?))
+        } else {
+            None
+        };
+        Ok(Stmt::If {
+            condition: Box::new(condition),
+            then_branch: Box::new(then_branch),
+            else_branch,
         })
     }
 

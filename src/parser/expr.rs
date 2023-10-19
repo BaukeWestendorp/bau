@@ -45,12 +45,7 @@ impl Parser<'_> {
                 | TokenKind::Minus
                 | TokenKind::Asterisk
                 | TokenKind::Slash) => op,
-                TokenKind::EndOfFile => break,
-                TokenKind::ParenClose
-                | TokenKind::BraceClose
-                | TokenKind::Comma
-                | TokenKind::Semicolon => break,
-                kind => return Err(self.error(format!("Invalid operator: `{}`", kind))),
+                _ => break,
             };
 
             if let Some((left_binding_power, right_binding_power)) = op.infix_binding_power() {

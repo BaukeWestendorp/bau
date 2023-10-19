@@ -26,7 +26,7 @@ impl Interpreter {
             Stmt::Return { .. } => self.execute_return_statement(statement),
             Stmt::Let { .. } => self.execute_let_statement(statement),
             Stmt::Assignment { .. } => self.execute_assignment_statement(statement),
-            Stmt::If { .. } => execution_error!("If statement not implemented"),
+            Stmt::If { .. } => self.execute_if_statement(statement),
             Stmt::Block { .. } => self.execute_block_statement(statement),
             Stmt::Loop { .. } => self.execute_loop_statement(statement),
             Stmt::Expression { .. } => self.execute_expression_statement(statement),
@@ -69,6 +69,27 @@ impl Interpreter {
                 Ok(Value::none())
             }
             _ => panic!("Expected assignment statement"),
+        }
+    }
+
+    pub fn execute_if_statement(&mut self, statement: &Stmt) -> BauResult<Value> {
+        match statement {
+            Stmt::If {
+                condition,
+                then_branch,
+                else_branch,
+            } => {
+                let condition = self.execute_expression(condition)?;
+                match condition {
+                    Value::Int(1) => self.execute_statement(then_branch),
+                    Value::Int(0) => match else_branch {
+                        Some(else_branch) => self.execute_statement(else_branch),
+                        None => Ok(Value::none()),
+                    },
+                    _ => execution_error!("Expected boolean condition"),
+                }
+            }
+            _ => panic!("Expected if statement"),
         }
     }
 

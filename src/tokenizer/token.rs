@@ -9,6 +9,7 @@ pub enum TokenKind {
     Fn,
     Let,
     If,
+    Else,
     Return,
     Loop,
 
@@ -43,6 +44,7 @@ impl std::fmt::Display for TokenKind {
             Self::Fn => "fn".to_string(),
             Self::Let => "let".to_string(),
             Self::If => "if".to_string(),
+            Self::Else => "else".to_string(),
             Self::Return => "return".to_string(),
             Self::Loop => "loop".to_string(),
 

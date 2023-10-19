@@ -49,7 +49,7 @@ impl Parser<'_> {
                 self.parse_prefix_operator_expression()
             }
             invalid_kind => {
-                Err(self.error(format!("Invalid start of expression: `{:?}`", invalid_kind)))
+                Err(self.error(format!("Invalid start of expression: `{}`", invalid_kind)))
             }
         }
     }
@@ -63,11 +63,11 @@ impl Parser<'_> {
         let literal = match literal {
             TokenKind::IntLiteral => Literal::Int(
                 text.parse()
-                    .expect(&format!("Invalid integer literal: {}", text)),
+                    .expect(&format!("Invalid integer literal: `{}`", text)),
             ),
             TokenKind::FloatLiteral => Literal::Float(
                 text.parse()
-                    .expect(&format!("Invalid float literal: {}", text)),
+                    .expect(&format!("Invalid float literal: `{}`", text)),
             ),
             TokenKind::StringLiteral => Literal::String(text.to_string()),
             _ => unreachable!(),

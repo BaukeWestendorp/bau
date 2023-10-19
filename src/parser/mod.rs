@@ -82,16 +82,16 @@ impl<'source> Parser<'source> {
         let current = self.peek();
 
         if current.kind == TokenKind::Error {
-            return Err(self.error(format!("Invalid token: {:?}", current.kind)));
+            return Err(self.error(format!("Invalid token: `{}`", current.kind)));
         }
 
         if current.kind != expected {
-            return Err(self.error(format!("Expected {:?}, found {:?}", expected, current.kind)));
+            return Err(self.error(format!("Expected `{}`, found `{}`", expected, current.kind)));
         }
 
         match self.consume() {
             Ok(token) => Ok(token),
-            Err(_) => Err(self.error(format!("Unexpected EOF. Expected {:?}", expected))),
+            Err(_) => Err(self.error(format!("Unexpected EOF. Expected `{}`", expected))),
         }
     }
 

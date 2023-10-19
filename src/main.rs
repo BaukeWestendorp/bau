@@ -19,7 +19,7 @@ fn main() {
     let source = match std::fs::read_to_string(&args.file_path) {
         Ok(source) => Source::from(source),
         Err(_) => {
-            eprintln!("Could not find file '{}'", args.file_path);
+            eprintln!("Could not find file `{}`", args.file_path);
             std::process::exit(1);
         }
     };

@@ -16,7 +16,7 @@ impl Parser<'_> {
     pub fn parse_item(&mut self) -> BauResult<Item> {
         match self.peek_kind() {
             TokenKind::Fn => self.parse_function_item(),
-            unknown => Err(self.error(format!("Unexpected token: `{:?}`", unknown))),
+            unknown => Err(self.error(format!("Unexpected token: `{}`", unknown))),
         }
     }
 

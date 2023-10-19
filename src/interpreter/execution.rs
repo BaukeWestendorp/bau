@@ -63,7 +63,7 @@ impl Interpreter {
             Stmt::Assignment { name, expr } => {
                 let value = self.execute_expression(expr)?;
                 if !self.variables.contains_key(name) {
-                    return execution_error!("No variable found with name: {}", name);
+                    return execution_error!("No variable found with name: `{}`", name);
                 }
                 self.variables.insert(name.clone(), value);
                 Ok(Value::none())
@@ -135,7 +135,7 @@ impl Interpreter {
     pub fn execute_ident_expression(&mut self, ident: &str) -> BauResult<Value> {
         match self.variables.get(ident) {
             Some(value) => Ok(value.clone()),
-            None => execution_error!("No variable found with name: {}", ident),
+            None => execution_error!("No variable found with name: `{}`", ident),
         }
     }
 
@@ -144,7 +144,7 @@ impl Interpreter {
             Expr::FnCall { name, args } => {
                 let function = match self.functions.get(name) {
                     Some(function) => function.clone(),
-                    None => return execution_error!("No function found with name: {}", name),
+                    None => return execution_error!("No function found with name: `{}`", name),
                 };
 
                 let value = self.execute_function(&function, args)?;
@@ -163,13 +163,13 @@ impl Interpreter {
                     TokenKind::Minus => match value {
                         Value::Int(value) => Ok(Value::Int(-value)),
                         Value::Float(value) => Ok(Value::Float(-value)),
-                        _ => execution_error!("Invalid prefix operator: {:?}", op),
+                        _ => execution_error!("Invalid prefix operator: `{}`", op),
                     },
                     TokenKind::ExclamationMark => match value {
                         Value::Bool(value) => Ok(Value::Bool(!value)),
-                        _ => execution_error!("Invalid prefix operator: {:?}", op),
+                        _ => execution_error!("Invalid prefix operator: `{}`", op),
                     },
-                    _ => execution_error!("Invalid prefix operator: {:?}", op),
+                    _ => execution_error!("Invalid prefix operator: `{}`", op),
                 }
             }
             _ => execution_error!("Expected prefix operator expression"),

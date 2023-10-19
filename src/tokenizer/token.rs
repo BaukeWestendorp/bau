@@ -31,6 +31,42 @@ pub enum TokenKind {
     StringLiteral,
 }
 
+impl std::fmt::Display for TokenKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let str = match self {
+            Self::Error => "error".to_string(),
+            Self::EndOfFile => "end of file".to_string(),
+            Self::Whitespace => "whitespace".to_string(),
+
+            Self::Fn => "fn".to_string(),
+            Self::Let => "let".to_string(),
+            Self::If => "if".to_string(),
+            Self::Return => "return".to_string(),
+            Self::Loop => "loop".to_string(),
+
+            Self::ParenOpen => "(".to_string(),
+            Self::ParenClose => ")".to_string(),
+            Self::BraceOpen => "{".to_string(),
+            Self::BraceClose => "}".to_string(),
+            Self::SquareOpen => "[".to_string(),
+            Self::SquareClose => "]".to_string(),
+            Self::Semicolon => ";".to_string(),
+            Self::Comma => ",".to_string(),
+            Self::Equals => "=".to_string(),
+            Self::Plus => "+".to_string(),
+            Self::Minus => "-".to_string(),
+            Self::ExclamationMark => "!".to_string(),
+
+            Self::Identifier => "identifier".to_string(),
+            Self::IntLiteral => "integer literal".to_string(),
+            Self::FloatLiteral => "float literal".to_string(),
+            Self::StringLiteral => "string literal".to_string(),
+        };
+
+        write!(f, "{}", str)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct Token {
     pub kind: TokenKind,

@@ -23,6 +23,8 @@ pub enum TokenKind {
     Equals,
     Plus,
     Minus,
+    Asterisk,
+    Slash,
     ExclamationMark,
 
     Identifier,
@@ -55,6 +57,8 @@ impl std::fmt::Display for TokenKind {
             Self::Equals => "=".to_string(),
             Self::Plus => "+".to_string(),
             Self::Minus => "-".to_string(),
+            Self::Asterisk => "*".to_string(),
+            Self::Slash => "/".to_string(),
             Self::ExclamationMark => "!".to_string(),
 
             Self::Identifier => "identifier".to_string(),

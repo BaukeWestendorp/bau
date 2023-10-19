@@ -6,6 +6,35 @@ use crate::tokenizer::token::TokenKind;
 
 impl Parser<'_> {
     pub fn parse_expression(&mut self) -> BauResult<Expr> {
+        let mut lhs = self.parse_primary_expression()?;
+
+        loop {
+            let op = match self.peek_kind() {
+                op @ (TokenKind::Plus
+                | TokenKind::Minus
+                | TokenKind::Asterisk
+                | TokenKind::Slash) => op,
+                TokenKind::EndOfFile => break,
+                TokenKind::ParenClose
+                | TokenKind::BraceClose
+                | TokenKind::Comma
+                | TokenKind::Semicolon => break,
+                kind => return Err(self.error(format!("Invalid operator: `{}`", kind))),
+            };
+
+            self.consume_specific(op)?;
+            let rhs = self.parse_expression()?;
+            lhs = Expr::InfixOp {
+                left: Box::new(lhs),
+                op,
+                right: Box::new(rhs),
+            };
+        }
+
+        Ok(lhs)
+    }
+
+    pub fn parse_primary_expression(&mut self) -> BauResult<Expr> {
         match self.peek_kind() {
             TokenKind::IntLiteral | TokenKind::FloatLiteral | TokenKind::StringLiteral => {
                 self.parse_literal_expression()

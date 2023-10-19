@@ -41,52 +41,54 @@ lazy_static! {
 
 pub(crate) fn get_rules() -> Vec<Rule> {
     macro_rules! char {
-        ($token:ident, $char:literal) => {
+        ($token:expr) => {
             Rule {
-                kind: TokenKind::$token,
-                matches: |input| match_single_char(input, $char),
+                kind: $token,
+                matches: |input| {
+                    match_single_char(input, $token.to_string().chars().nth(0).unwrap())
+                },
             }
         };
     }
 
     macro_rules! keyword {
-        ($token:ident, $keyword:literal) => {
+        ($token:expr) => {
             Rule {
-                kind: TokenKind::$token,
-                matches: |input| match_keyword(input, $keyword),
+                kind: $token,
+                matches: |input| match_keyword(input, $token.to_string().as_str()),
             }
         };
     }
 
     macro_rules! regex {
-        ($token:ident, $regex:expr) => {
+        ($token:expr, $regex:expr) => {
             Rule {
-                kind: TokenKind::$token,
+                kind: $token,
                 matches: |input| match_regex(input, $regex),
             }
         };
     }
 
     vec![
-        char!(ParenOpen, '('),
-        char!(ParenClose, ')'),
-        char!(BraceOpen, '{'),
-        char!(BraceClose, '}'),
-        char!(SquareOpen, '['),
-        char!(SquareClose, ']'),
-        char!(Semicolon, ';'),
-        char!(Comma, ','),
-        char!(Equals, '='),
-        char!(Plus, '+'),
-        char!(Minus, '-'),
-        char!(ExclamationMark, '!'),
-        keyword!(Let, "let"),
-        keyword!(Fn, "fn"),
-        keyword!(If, "if"),
-        keyword!(Return, "return"),
-        keyword!(Loop, "loop"),
-        regex!(StringLiteral, &STRING_REGEX),
-        regex!(FloatLiteral, &FLOAT_REGEX),
-        regex!(Identifier, &IDENTIFIER_REGEX),
+        char!(TokenKind::ParenOpen),
+        char!(TokenKind::ParenClose),
+        char!(TokenKind::BraceOpen),
+        char!(TokenKind::BraceClose),
+        char!(TokenKind::SquareOpen),
+        char!(TokenKind::SquareClose),
+        char!(TokenKind::Semicolon),
+        char!(TokenKind::Comma),
+        char!(TokenKind::Equals),
+        char!(TokenKind::Plus),
+        char!(TokenKind::Minus),
+        char!(TokenKind::ExclamationMark),
+        keyword!(TokenKind::Let),
+        keyword!(TokenKind::Fn),
+        keyword!(TokenKind::If),
+        keyword!(TokenKind::Return),
+        keyword!(TokenKind::Loop),
+        regex!(TokenKind::StringLiteral, &STRING_REGEX),
+        regex!(TokenKind::FloatLiteral, &FLOAT_REGEX),
+        regex!(TokenKind::Identifier, &IDENTIFIER_REGEX),
     ]
 }

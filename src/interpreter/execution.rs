@@ -43,7 +43,7 @@ impl Interpreter {
                 let value = self.execute_expression(value)?;
                 Ok(value)
             }
-            _ => execution_error!("Expected return statement"),
+            _ => panic!("Expected return statement"),
         }
     }
 
@@ -54,7 +54,7 @@ impl Interpreter {
                 self.variables.insert(name.clone(), initial_value);
                 Ok(Value::none())
             }
-            _ => execution_error!("Expected let statement"),
+            _ => panic!("Expected let statement"),
         }
     }
 
@@ -68,7 +68,7 @@ impl Interpreter {
                 self.variables.insert(name.clone(), value);
                 Ok(Value::none())
             }
-            _ => execution_error!("Expected assignment statement"),
+            _ => panic!("Expected assignment statement"),
         }
     }
 
@@ -84,7 +84,7 @@ impl Interpreter {
                 }
                 last_result
             }
-            _ => execution_error!("Expected block statement"),
+            _ => panic!("Expected block statement"),
         }
     }
 
@@ -96,14 +96,14 @@ impl Interpreter {
                     return result;
                 }
             },
-            _ => execution_error!("Expected loop statement"),
+            _ => panic!("Expected loop statement"),
         }
     }
 
     pub fn execute_expression_statement(&mut self, expression: &Stmt) -> BauResult<Value> {
         match expression {
             Stmt::Expression { expr } => self.execute_expression(expr),
-            _ => execution_error!("Expected expression statement"),
+            _ => panic!("Expected expression statement"),
         }
     }
 
@@ -113,9 +113,7 @@ impl Interpreter {
             Expr::Ident(ident) => self.execute_ident_expression(ident),
             Expr::FnCall { .. } => self.execute_function_call_expression(expression),
             Expr::PrefixOp { .. } => self.execute_prefix_operator_expression(expression),
-            Expr::InfixOp { .. } => {
-                execution_error!("InfixOp expression execution not implemented")
-            }
+            Expr::InfixOp { .. } => self.execute_infix_operator_expression(expression),
             Expr::PostfixOp { .. } => {
                 execution_error!("PostfixOp expression execution not implemented")
             }
@@ -150,7 +148,7 @@ impl Interpreter {
                 let value = self.execute_function(&function, args)?;
                 return Ok(value);
             }
-            _ => execution_error!("Expected function call expression"),
+            _ => panic!("Expected function call expression"),
         }
     }
 
@@ -172,7 +170,49 @@ impl Interpreter {
                     _ => execution_error!("Invalid prefix operator: `{}`", op),
                 }
             }
-            _ => execution_error!("Expected prefix operator expression"),
+            _ => panic!("Expected prefix operator expression"),
+        }
+    }
+
+    pub fn execute_infix_operator_expression(&mut self, infix_op: &Expr) -> BauResult<Value> {
+        match infix_op {
+            Expr::InfixOp { op, left, right } => {
+                let left = self.execute_expression(left)?;
+                let right = self.execute_expression(right)?;
+                match op {
+                    TokenKind::Plus => match (left, right) {
+                        (Value::Int(left), Value::Int(right)) => Ok(Value::Int(left + right)),
+                        (Value::Float(left), Value::Float(right)) => Ok(Value::Float(left + right)),
+                        (Value::String(left), Value::String(right)) => {
+                            Ok(Value::String(format!("{}{}", left, right)))
+                        }
+                        _ => execution_error!(
+                            "Addition is only available between ints, floats and strings"
+                        ),
+                    },
+                    TokenKind::Minus => match (left, right) {
+                        (Value::Int(left), Value::Int(right)) => Ok(Value::Int(left - right)),
+                        (Value::Float(left), Value::Float(right)) => Ok(Value::Float(left - right)),
+                        _ => execution_error!(
+                            "Subtraction is only available between ints and floats"
+                        ),
+                    },
+                    TokenKind::Asterisk => match (left, right) {
+                        (Value::Int(left), Value::Int(right)) => Ok(Value::Int(left * right)),
+                        (Value::Float(left), Value::Float(right)) => Ok(Value::Float(left * right)),
+                        _ => execution_error!(
+                            "Multiplication is only available between ints and floats"
+                        ),
+                    },
+                    TokenKind::Slash => match (left, right) {
+                        (Value::Int(left), Value::Int(right)) => Ok(Value::Int(left / right)),
+                        (Value::Float(left), Value::Float(right)) => Ok(Value::Float(left / right)),
+                        _ => execution_error!("Division is only available between ints and floats"),
+                    },
+                    _ => execution_error!("Invalid infix operator: `{}`", op),
+                }
+            }
+            _ => panic!("Expected infix operator expression"),
         }
     }
 }

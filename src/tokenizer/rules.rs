@@ -84,6 +84,7 @@ pub(crate) fn get_rules() -> Vec<Rule> {
         keyword!(Fn, "fn"),
         keyword!(If, "if"),
         keyword!(Return, "return"),
+        keyword!(Loop, "loop"),
         regex!(StringLiteral, &STRING_REGEX),
         regex!(FloatLiteral, &FLOAT_REGEX),
         regex!(Identifier, &IDENTIFIER_REGEX),

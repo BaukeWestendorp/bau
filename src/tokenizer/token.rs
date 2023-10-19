@@ -10,6 +10,7 @@ pub enum TokenKind {
     Let,
     If,
     Return,
+    Loop,
 
     ParenOpen,
     ParenClose,

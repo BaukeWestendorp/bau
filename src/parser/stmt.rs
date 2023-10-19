@@ -9,6 +9,7 @@ impl Parser<'_> {
             TokenKind::Let => self.parse_let_statement(),
             TokenKind::If => todo!("Implement if statement"),
             TokenKind::Return => self.parse_return_statement(),
+            TokenKind::Loop => self.parse_loop_statement(),
             TokenKind::BraceOpen => self.parse_block_statement(),
             TokenKind::Identifier => {
                 let next = self.peek_next_kind();
@@ -47,6 +48,15 @@ impl Parser<'_> {
         self.consume_specific(TokenKind::Semicolon)?;
         Ok(Stmt::Return {
             expr: Some(Box::new(value)),
+        })
+    }
+
+    pub fn parse_loop_statement(&mut self) -> BauResult<Stmt> {
+        self.consume_specific(TokenKind::Loop)?;
+
+        let body = self.parse_block_statement()?;
+        Ok(Stmt::Loop {
+            body: Box::new(body),
         })
     }
 

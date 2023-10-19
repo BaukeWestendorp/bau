@@ -7,11 +7,6 @@ use crate::tokenizer::token::TokenKind;
 impl Parser<'_> {
     pub fn parse_expression(&mut self) -> BauResult<Expr> {
         match self.peek_kind() {
-            TokenKind::Error => {
-                let error_token = self.consume().expect("Expected Error");
-                let text = self.text(error_token);
-                return Err(self.error(format!("Error while parsing expression at: {}", text)));
-            }
             TokenKind::IntLiteral | TokenKind::FloatLiteral | TokenKind::StringLiteral => {
                 self.parse_literal_expression()
             }

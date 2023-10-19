@@ -43,6 +43,9 @@ pub enum Stmt {
         then_branch: Box<Stmt>,
         else_branch: Option<Box<Stmt>>,
     },
+    Loop {
+        body: Box<Stmt>,
+    },
     Block {
         statements: Vec<Stmt>,
     },
@@ -67,6 +70,6 @@ pub enum Item {
     Function {
         name: String,
         parameters: Vec<String>,
-        body: Vec<Stmt>,
+        body: Stmt,
     },
 }

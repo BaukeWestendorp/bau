@@ -36,10 +36,7 @@ impl Parser<'_> {
         if !self.at(TokenKind::BraceOpen) {
             return Err(self.error("Expected `{` after function declaration".to_string()));
         }
-        let body = match self.parse_statement()? {
-            Stmt::Block { statements } => statements,
-            _ => unreachable!(),
-        };
+        let body = self.parse_statement()?;
 
         Ok(Item::Function {
             name,

@@ -17,16 +17,7 @@ impl Interpreter {
 
     pub fn execute_function(&mut self, function: &Item, _args: &Vec<Expr>) -> BauResult<Value> {
         match function {
-            Item::Function { body, .. } => {
-                let mut last_result = Ok(Value::none());
-                for statement in body {
-                    last_result = self.execute_statement(statement);
-                    if last_result.is_err() {
-                        return last_result;
-                    }
-                }
-                last_result
-            }
+            Item::Function { body, .. } => self.execute_block_statement(body),
         }
     }
 
@@ -36,7 +27,8 @@ impl Interpreter {
             Stmt::Let { .. } => self.execute_let_statement(statement),
             Stmt::Assignment { .. } => self.execute_assignment_statement(statement),
             Stmt::If { .. } => execution_error!("If statement not implemented"),
-            Stmt::Block { .. } => execution_error!("Block statement not implemented"),
+            Stmt::Block { .. } => self.execute_block_statement(statement),
+            Stmt::Loop { .. } => self.execute_loop_statement(statement),
             Stmt::Expression { .. } => self.execute_expression_statement(statement),
         }
     }
@@ -77,6 +69,34 @@ impl Interpreter {
                 Ok(Value::none())
             }
             _ => execution_error!("Expected assignment statement"),
+        }
+    }
+
+    pub fn execute_block_statement(&mut self, statement: &Stmt) -> BauResult<Value> {
+        match statement {
+            Stmt::Block { statements } => {
+                let mut last_result = Ok(Value::none());
+                for statement in statements {
+                    last_result = self.execute_statement(statement);
+                    if last_result.is_err() {
+                        return last_result;
+                    }
+                }
+                last_result
+            }
+            _ => execution_error!("Expected block statement"),
+        }
+    }
+
+    pub fn execute_loop_statement(&mut self, statement: &Stmt) -> BauResult<Value> {
+        match statement {
+            Stmt::Loop { body } => loop {
+                let result = self.execute_statement(body);
+                if result.is_err() {
+                    return result;
+                }
+            },
+            _ => execution_error!("Expected loop statement"),
         }
     }
 

@@ -4,8 +4,39 @@ use crate::parser::ast::{Expr, Literal};
 use crate::parser::Parser;
 use crate::tokenizer::token::TokenKind;
 
+trait Operator {
+    fn prefix_binding_power(&self) -> ((), u8);
+    fn infix_binding_power(&self) -> Option<(u8, u8)>;
+    fn postfix_binding_power(&self) -> Option<(u8, ())>;
+}
+
+impl Operator for TokenKind {
+    fn prefix_binding_power(&self) -> ((), u8) {
+        match self {
+            TokenKind::Plus | TokenKind::Minus | TokenKind::ExclamationMark => ((), 50),
+            _ => unreachable!("Not a prefix operator: `{}`", self),
+        }
+    }
+
+    fn infix_binding_power(&self) -> Option<(u8, u8)> {
+        match self {
+            TokenKind::Plus | TokenKind::Minus => Some((9, 10)),
+            TokenKind::Asterisk | TokenKind::Slash => Some((11, 12)),
+            _ => None,
+        }
+    }
+
+    fn postfix_binding_power(&self) -> Option<(u8, ())> {
+        None
+    }
+}
+
 impl Parser<'_> {
     pub fn parse_expression(&mut self) -> BauResult<Expr> {
+        self.parse_pratt_expression(0)
+    }
+
+    pub fn parse_pratt_expression(&mut self, min_binding_power: u8) -> BauResult<Expr> {
         let mut lhs = self.parse_primary_expression()?;
 
         loop {
@@ -22,13 +53,22 @@ impl Parser<'_> {
                 kind => return Err(self.error(format!("Invalid operator: `{}`", kind))),
             };
 
-            self.consume_specific(op)?;
-            let rhs = self.parse_expression()?;
-            lhs = Expr::InfixOp {
-                left: Box::new(lhs),
-                op,
-                right: Box::new(rhs),
-            };
+            if let Some((left_binding_power, right_binding_power)) = op.infix_binding_power() {
+                if left_binding_power < min_binding_power {
+                    break;
+                }
+
+                self.consume_specific(op)?;
+                let rhs = self.parse_pratt_expression(right_binding_power)?;
+                lhs = Expr::InfixOp {
+                    left: Box::new(lhs),
+                    op,
+                    right: Box::new(rhs),
+                };
+
+                continue;
+            }
+            break;
         }
 
         Ok(lhs)
@@ -54,7 +94,7 @@ impl Parser<'_> {
                 let mut args = vec![];
                 self.consume_specific(TokenKind::ParenOpen)?;
                 while !self.at(TokenKind::ParenClose) {
-                    let arg = self.parse_expression()?;
+                    let arg = self.parse_pratt_expression(0)?;
                     args.push(arg);
                     if self.at(TokenKind::Comma) {
                         self.consume_specific(TokenKind::Comma)?;
@@ -70,7 +110,7 @@ impl Parser<'_> {
             }
             TokenKind::ParenOpen => {
                 self.consume_specific(TokenKind::ParenOpen)?;
-                let expr = self.parse_expression();
+                let expr = self.parse_pratt_expression(0);
                 self.consume_specific(TokenKind::ParenClose)?;
                 expr
             }
@@ -106,7 +146,7 @@ impl Parser<'_> {
 
     pub fn parse_prefix_operator_expression(&mut self) -> BauResult<Expr> {
         let op = self.consume().expect("Expected operator").kind;
-        let expr = self.parse_expression()?;
+        let expr = self.parse_pratt_expression(0)?;
         Ok(Expr::PrefixOp {
             op,
             expr: Box::new(expr),

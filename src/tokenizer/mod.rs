@@ -2,7 +2,6 @@ use crate::tokenizer::rules::Rule;
 use crate::tokenizer::token::{Span, Token, TokenKind};
 
 pub mod rules;
-pub mod source;
 pub mod token;
 
 #[derive(Debug, Clone)]

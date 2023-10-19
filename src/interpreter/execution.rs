@@ -34,7 +34,7 @@ impl Interpreter {
         match statement {
             Stmt::Return { .. } => self.execute_return_statement(statement),
             Stmt::Let { .. } => self.execute_let_statement(statement),
-            Stmt::Assignment { .. } => execution_error!("Assignment statement not implemented"),
+            Stmt::Assignment { .. } => self.execute_assignment_statement(statement),
             Stmt::If { .. } => execution_error!("If statement not implemented"),
             Stmt::Block { .. } => execution_error!("Block statement not implemented"),
             Stmt::Expression { .. } => self.execute_expression_statement(statement),
@@ -63,6 +63,20 @@ impl Interpreter {
                 Ok(Value::none())
             }
             _ => execution_error!("Expected let statement"),
+        }
+    }
+
+    pub fn execute_assignment_statement(&mut self, statement: &Stmt) -> BauResult<Value> {
+        match statement {
+            Stmt::Assignment { name, expr } => {
+                let value = self.execute_expression(expr)?;
+                if !self.variables.contains_key(name) {
+                    return execution_error!("No variable found with name: {}", name);
+                }
+                self.variables.insert(name.clone(), value);
+                Ok(Value::none())
+            }
+            _ => execution_error!("Expected assignment statement"),
         }
     }
 

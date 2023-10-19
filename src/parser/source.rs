@@ -1,3 +1,5 @@
+use crate::tokenizer::token::{Span, Token, TokenKind};
+
 pub struct Source {
     text: String,
     line_count: usize,
@@ -19,6 +21,16 @@ impl Source {
             }
         }
         (line, column)
+    }
+
+    pub fn eof_token(&self) -> Token {
+        Token {
+            kind: TokenKind::EndOfFile,
+            span: Span {
+                start: self.text().len(),
+                end: self.text().len(),
+            },
+        }
     }
 }
 

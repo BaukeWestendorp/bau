@@ -3,6 +3,7 @@ use crate::execution_error;
 use crate::interpreter::value::Value;
 use crate::interpreter::Interpreter;
 use crate::parser::ast::{Expr, Item, Literal, Stmt};
+use crate::tokenizer::token::TokenKind;
 
 impl Interpreter {
     pub fn execute_main(&mut self) -> BauResult<()> {
@@ -77,9 +78,7 @@ impl Interpreter {
             Expr::Literal(literal) => self.execute_literal_expression(literal),
             Expr::Ident(ident) => self.execute_ident_expression(ident),
             Expr::FnCall { .. } => self.execute_function_call_expression(expression),
-            Expr::PrefixOp { .. } => {
-                execution_error!("PrefixOp expression execution not implemented")
-            }
+            Expr::PrefixOp { .. } => self.execute_prefix_operator_expression(expression),
             Expr::InfixOp { .. } => {
                 execution_error!("InfixOp expression execution not implemented")
             }
@@ -118,6 +117,28 @@ impl Interpreter {
                 return Ok(value);
             }
             _ => execution_error!("Expected function call expression"),
+        }
+    }
+
+    pub fn execute_prefix_operator_expression(&mut self, prefix_op: &Expr) -> BauResult<Value> {
+        match prefix_op {
+            Expr::PrefixOp { op, expr } => {
+                let value = self.execute_expression(expr)?;
+                match op {
+                    TokenKind::Plus => Ok(value),
+                    TokenKind::Minus => match value {
+                        Value::Int(value) => Ok(Value::Int(-value)),
+                        Value::Float(value) => Ok(Value::Float(-value)),
+                        _ => execution_error!("Invalid prefix operator: {:?}", op),
+                    },
+                    TokenKind::ExclamationMark => match value {
+                        Value::Bool(value) => Ok(Value::Bool(!value)),
+                        _ => execution_error!("Invalid prefix operator: {:?}", op),
+                    },
+                    _ => execution_error!("Invalid prefix operator: {:?}", op),
+                }
+            }
+            _ => execution_error!("Expected prefix operator expression"),
         }
     }
 }

@@ -1,5 +1,6 @@
 use crate::parser::source::Source;
 use crate::tokenizer::token::Token;
+use colored::Colorize;
 
 #[macro_export]
 macro_rules! execution_error {
@@ -37,41 +38,49 @@ pub enum BauError {
 }
 
 impl BauError {
-    pub fn log(&self, file: &str, source: &Source) {
+    pub fn log(&self, source: &Source) {
         match self {
             BauError::ParserError { token, message } => {
-                let (line, column) = source.line_and_column(token.span.start);
-
-                eprint!("\x1b[31m"); // RED
-                eprintln!("Error at {}:{}:{}", file, line, column);
-                eprint!("\x1b[0m"); // RESET
-
-                let print_source_line = |line: usize| {
-                    let source_line = source.line(line);
-                    eprint!("\x1b[37m"); // WHITE
-                    eprint!("{}\n", source_line);
-                    eprint!("\x1b[0m"); // RESET
+                let print_line_gutter = |line_number: Option<usize>| {
+                    match line_number {
+                        Some(line_number) => {
+                            eprint!("{: <1$}", "", line_number.to_string().len());
+                            eprint!("{}", line_number);
+                        }
+                        None => {
+                            eprint!("{: <1$} ", "", " ".len());
+                        }
+                    }
+                    eprint!(" {} ", "|".bright_red());
                 };
 
-                print_source_line(line);
-                eprint!("\x1b[31m"); // RED
-                let underline = "^".repeat(token.len());
-                eprint!(
-                    "{: <1$}{underline} {message}",
-                    "",
-                    column - 1,
-                    message = message
+                let print_line = |line: usize, column: usize, len: usize| {
+                    let (start, end) = source.line(line).split_at(column - 1);
+                    let (mid_error, end) = end.split_at(len);
+                    print_line_gutter(Some(line));
+                    eprintln!("{}{}{}", start.white(), mid_error.bright_red(), end.white());
+                };
+
+                let (line, column) = source.line_and_column(token.span.start);
+                eprintln!("{}: {}", "error".bright_red(), message);
+                eprintln!(
+                    "{}{} {}:{}:{}",
+                    "-".repeat(line.to_string().len() + 2).bright_red(),
+                    ">".bright_red(),
+                    source.file_path(),
+                    line,
+                    column
                 );
-                eprint!("\x1b[0m"); // RESET
+                print_line(line, column, token.span.len());
+                print_line_gutter(None);
+                eprint!("{: <1$}", "", column - 1);
+                eprintln!("{}{}", "^ ".bright_red(), message.bright_red());
             }
             BauError::InterpreterError { message } => {
-                eprint!("\x1b[31m"); // RED
                 eprintln!("Error: {}", message);
             }
             BauError::ExecutionError { message } => {
-                eprint!("\x1b[31m"); // RED
                 eprintln!("Error: {}", message);
-                eprint!("\x1b[0m"); // RESET
             }
         }
     }

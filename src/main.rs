@@ -17,7 +17,7 @@ fn main() {
     let args = Args::parse();
 
     let source = match std::fs::read_to_string(&args.file_path) {
-        Ok(source) => Source::from(source),
+        Ok(text) => Source::new(text, args.file_path),
         Err(_) => {
             eprintln!("Could not find file `{}`", args.file_path);
             std::process::exit(1);
@@ -28,13 +28,13 @@ fn main() {
     let top_level = parser.parse_top_level();
 
     match top_level {
-        Err(error) => error.log(args.file_path.as_str(), &source),
+        Err(error) => error.log(&source),
         Ok(top_level) => {
             let mut interpreter = interpreter::Interpreter::new();
             match interpreter.evaluate_top_level(top_level) {
-                Err(error) => error.log(args.file_path.as_str(), &source),
+                Err(error) => error.log(&source),
                 Ok(_) => match interpreter.execute_main() {
-                    Err(error) => error.log(args.file_path.as_str(), &source),
+                    Err(error) => error.log(&source),
                     Ok(_) => {}
                 },
             }

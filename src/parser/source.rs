@@ -1,6 +1,7 @@
 use crate::tokenizer::token::{Span, Token, TokenKind};
 
 pub struct Source {
+    file_path: String,
     text: String,
     line_count: usize,
 }
@@ -35,13 +36,18 @@ impl Source {
 }
 
 impl Source {
-    pub fn new(text: &str) -> Self {
+    pub fn new(text: String, file_path: String) -> Self {
         let clean_text = text.replace('\t', "    ");
         let line_count = clean_text.lines().count();
         Self {
+            file_path,
             text: clean_text,
             line_count,
         }
+    }
+
+    pub fn file_path(&self) -> &str {
+        &self.file_path
     }
 
     pub fn line_count(&self) -> usize {
@@ -54,17 +60,5 @@ impl Source {
 
     pub fn text(&self) -> &str {
         &self.text
-    }
-}
-
-impl From<&str> for Source {
-    fn from(value: &str) -> Self {
-        Self::new(value)
-    }
-}
-
-impl From<String> for Source {
-    fn from(value: String) -> Self {
-        Self::new(value.as_str())
     }
 }

@@ -8,8 +8,10 @@ impl Parser<'_> {
         match self.peek_kind() {
             TokenKind::Let => self.parse_let_statement(),
             TokenKind::If => self.parse_if_statement(),
-            TokenKind::Return => self.parse_return_statement(),
             TokenKind::Loop => self.parse_loop_statement(),
+            TokenKind::Return => self.parse_return_statement(),
+            TokenKind::Continue => self.parse_continue_statement(),
+            TokenKind::Break => self.parse_break_statement(),
             TokenKind::BraceOpen => self.parse_block_statement(),
             TokenKind::Identifier => {
                 let next = self.peek_offset_kind(1);
@@ -52,6 +54,15 @@ impl Parser<'_> {
         })
     }
 
+    pub fn parse_loop_statement(&mut self) -> BauResult<Stmt> {
+        self.consume_specific(TokenKind::Loop)?;
+
+        let body = self.parse_block_statement()?;
+        Ok(Stmt::Loop {
+            body: Box::new(body),
+        })
+    }
+
     pub fn parse_return_statement(&mut self) -> BauResult<Stmt> {
         self.consume_specific(TokenKind::Return)?;
 
@@ -68,13 +79,16 @@ impl Parser<'_> {
         })
     }
 
-    pub fn parse_loop_statement(&mut self) -> BauResult<Stmt> {
-        self.consume_specific(TokenKind::Loop)?;
+    pub fn parse_continue_statement(&mut self) -> BauResult<Stmt> {
+        self.consume_specific(TokenKind::Continue)?;
+        self.consume_specific(TokenKind::Semicolon)?;
+        Ok(Stmt::Continue)
+    }
 
-        let body = self.parse_block_statement()?;
-        Ok(Stmt::Loop {
-            body: Box::new(body),
-        })
+    pub fn parse_break_statement(&mut self) -> BauResult<Stmt> {
+        self.consume_specific(TokenKind::Break)?;
+        self.consume_specific(TokenKind::Semicolon)?;
+        Ok(Stmt::Break)
     }
 
     pub fn parse_block_statement(&mut self) -> BauResult<Stmt> {

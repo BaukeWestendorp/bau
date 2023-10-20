@@ -1,5 +1,6 @@
 use crate::error::BauResult;
 use crate::execution_error;
+use crate::interpreter::scope::{ControlFlow, Scope};
 use crate::interpreter::value::Value;
 use crate::interpreter::Interpreter;
 use crate::parser::ast::{Expr, Item, Literal, Stmt};
@@ -15,50 +16,53 @@ impl Interpreter {
         Ok(())
     }
 
-    pub fn execute_function(&mut self, function: &Item, _args: &Vec<Expr>) -> BauResult<Value> {
+    pub fn execute_function(
+        &mut self,
+        function: &Item,
+        _args: &Vec<Expr>,
+    ) -> BauResult<Option<Value>> {
         match function {
-            Item::Function { body, .. } => self.execute_block_statement(body),
+            Item::Function { body, .. } => {
+                let return_value =
+                    self.execute_block_statement(body)?
+                        .map_or(None, |control_flow| match control_flow {
+                            ControlFlow::Return(value) => value,
+                            _ => None,
+                        });
+                Ok(return_value)
+            }
         }
     }
 
-    pub fn execute_statement(&mut self, statement: &Stmt) -> BauResult<Value> {
+    pub fn execute_statement(&mut self, statement: &Stmt) -> BauResult<()> {
         match statement {
-            Stmt::Return { .. } => self.execute_return_statement(statement),
             Stmt::Let { .. } => self.execute_let_statement(statement),
             Stmt::Assignment { .. } => self.execute_assignment_statement(statement),
             Stmt::If { .. } => self.execute_if_statement(statement),
-            Stmt::Block { .. } => self.execute_block_statement(statement),
+            Stmt::Block { .. } => {
+                self.execute_block_statement(statement)?;
+                Ok(())
+            }
             Stmt::Loop { .. } => self.execute_loop_statement(statement),
+            Stmt::Return { .. } => self.execute_return_statement(statement),
+            Stmt::Continue => self.execute_continue_statement(),
+            Stmt::Break => self.execute_break_statement(),
             Stmt::Expression { .. } => self.execute_expression_statement(statement),
         }
     }
 
-    pub fn execute_return_statement(&mut self, statement: &Stmt) -> BauResult<Value> {
-        match statement {
-            Stmt::Return { expr } => {
-                let value = match expr {
-                    Some(value) => value,
-                    None => return Ok(Value::none()),
-                };
-                let value = self.execute_expression(value)?;
-                Ok(value)
-            }
-            _ => panic!("Expected return statement"),
-        }
-    }
-
-    pub fn execute_let_statement(&mut self, statement: &Stmt) -> BauResult<Value> {
+    pub fn execute_let_statement(&mut self, statement: &Stmt) -> BauResult<()> {
         match statement {
             Stmt::Let { name, expr } => {
                 let initial_value = self.execute_expression(expr)?;
                 self.variables.insert(name.clone(), initial_value);
-                Ok(Value::none())
+                Ok(())
             }
             _ => panic!("Expected let statement"),
         }
     }
 
-    pub fn execute_assignment_statement(&mut self, statement: &Stmt) -> BauResult<Value> {
+    pub fn execute_assignment_statement(&mut self, statement: &Stmt) -> BauResult<()> {
         match statement {
             Stmt::Assignment { name, expr } => {
                 let value = self.execute_expression(expr)?;
@@ -66,13 +70,13 @@ impl Interpreter {
                     return execution_error!("No variable found with name: `{}`", name);
                 }
                 self.variables.insert(name.clone(), value);
-                Ok(Value::none())
+                Ok(())
             }
             _ => panic!("Expected assignment statement"),
         }
     }
 
-    pub fn execute_if_statement(&mut self, statement: &Stmt) -> BauResult<Value> {
+    pub fn execute_if_statement(&mut self, statement: &Stmt) -> BauResult<()> {
         match statement {
             Stmt::If {
                 condition,
@@ -84,7 +88,7 @@ impl Interpreter {
                     Value::Bool(true) => self.execute_statement(then_branch),
                     Value::Bool(false) => match else_branch {
                         Some(else_branch) => self.execute_statement(else_branch),
-                        None => Ok(Value::none()),
+                        None => Ok(()),
                     },
                     _ => execution_error!("Expected boolean condition, found: `{}`", condition),
                 }
@@ -93,37 +97,71 @@ impl Interpreter {
         }
     }
 
-    pub fn execute_block_statement(&mut self, statement: &Stmt) -> BauResult<Value> {
+    pub fn execute_block_statement(&mut self, statement: &Stmt) -> BauResult<Option<ControlFlow>> {
         match statement {
             Stmt::Block { statements } => {
-                let mut last_result = Ok(Value::none());
+                self.scope_stack.push(Scope { control_flow: None });
                 for statement in statements {
-                    last_result = self.execute_statement(statement);
-                    if last_result.is_err() {
-                        return last_result;
+                    self.execute_statement(statement)?;
+                    if self.control_flow_should_break() {
+                        break;
                     }
                 }
-                last_result
+                let control_flow = self.current_scope().control_flow.clone();
+                self.scope_stack.pop();
+                Ok(control_flow)
             }
             _ => panic!("Expected block statement"),
         }
     }
 
-    pub fn execute_loop_statement(&mut self, statement: &Stmt) -> BauResult<Value> {
+    pub fn execute_loop_statement(&mut self, statement: &Stmt) -> BauResult<()> {
         match statement {
             Stmt::Loop { body } => loop {
-                let result = self.execute_statement(body);
-                if result.is_err() {
-                    return result;
+                match self.execute_block_statement(body) {
+                    Ok(control_flow) => match control_flow {
+                        Some(ControlFlow::Continue) => continue,
+                        Some(ControlFlow::Break) => break,
+                        Some(ControlFlow::Return(_)) => return Ok(()),
+                        None => {}
+                    },
+                    Err(error) => return Err(error),
                 }
             },
             _ => panic!("Expected loop statement"),
         }
+
+        Ok(())
     }
 
-    pub fn execute_expression_statement(&mut self, expression: &Stmt) -> BauResult<Value> {
+    pub fn execute_return_statement(&mut self, statement: &Stmt) -> BauResult<()> {
+        match statement {
+            Stmt::Return { expr } => {
+                let value = match expr {
+                    Some(value) => value,
+                    None => return Ok(()),
+                };
+                let value = self.execute_expression(value)?;
+                self.set_control_flow(ControlFlow::Return(Some(value.clone())));
+                Ok(())
+            }
+            _ => panic!("Expected return statement"),
+        }
+    }
+
+    pub fn execute_continue_statement(&mut self) -> BauResult<()> {
+        self.set_control_flow(ControlFlow::Continue);
+        Ok(())
+    }
+
+    pub fn execute_break_statement(&mut self) -> BauResult<()> {
+        self.set_control_flow(ControlFlow::Break);
+        Ok(())
+    }
+
+    pub fn execute_expression_statement(&mut self, expression: &Stmt) -> BauResult<()> {
         match expression {
-            Stmt::Expression { expr } => self.execute_expression(expr),
+            Stmt::Expression { expr } => self.execute_expression(expr).map(|_| ()),
             _ => panic!("Expected expression statement"),
         }
     }
@@ -131,7 +169,7 @@ impl Interpreter {
     pub fn execute_expression(&mut self, expression: &Expr) -> BauResult<Value> {
         match expression {
             Expr::Literal(literal) => self.execute_literal_expression(literal),
-            Expr::Ident(ident) => self.execute_ident_expression(ident),
+            Expr::Identifier(identifier) => self.execute_identifier_expression(identifier),
             Expr::FnCall { .. } => self.execute_function_call_expression(expression),
             Expr::PrefixOp { .. } => self.execute_prefix_operator_expression(expression),
             Expr::InfixOp { .. } => self.execute_infix_operator_expression(expression),
@@ -151,7 +189,7 @@ impl Interpreter {
         }
     }
 
-    pub fn execute_ident_expression(&mut self, ident: &str) -> BauResult<Value> {
+    pub fn execute_identifier_expression(&mut self, ident: &str) -> BauResult<Value> {
         match self.variables.get(ident) {
             Some(value) => Ok(value.clone()),
             None => execution_error!("No variable found with name: `{}`", ident),
@@ -167,7 +205,7 @@ impl Interpreter {
                 };
 
                 let value = self.execute_function(&function, args)?;
-                return Ok(value);
+                return Ok(value.unwrap_or(Value::none()));
             }
             _ => panic!("Expected function call expression"),
         }

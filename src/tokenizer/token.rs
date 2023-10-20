@@ -10,8 +10,10 @@ pub enum TokenKind {
     Let,
     If,
     Else,
-    Return,
     Loop,
+    Return,
+    Continue,
+    Break,
 
     ParenOpen,
     ParenClose,
@@ -53,8 +55,10 @@ impl std::fmt::Display for TokenKind {
             Self::Let => "let".to_string(),
             Self::If => "if".to_string(),
             Self::Else => "else".to_string(),
-            Self::Return => "return".to_string(),
             Self::Loop => "loop".to_string(),
+            Self::Return => "return".to_string(),
+            Self::Continue => "continue".to_string(),
+            Self::Break => "break".to_string(),
 
             Self::ParenOpen => "(".to_string(),
             Self::ParenClose => ")".to_string(),

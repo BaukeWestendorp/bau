@@ -4,7 +4,7 @@ use crate::tokenizer::token::TokenKind;
 #[derive(Debug, Clone, PartialEq)]
 pub enum Expr {
     Literal(Literal),
-    Ident(String),
+    Identifier(String),
     BuiltinFnCall {
         function: BuiltinFunction,
         args: Vec<Expr>,
@@ -52,6 +52,8 @@ pub enum Stmt {
     Return {
         expr: Option<Box<Expr>>,
     },
+    Continue,
+    Break,
     Expression {
         expr: Box<Expr>,
     },

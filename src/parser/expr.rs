@@ -97,7 +97,7 @@ impl Parser<'_> {
 
                 // Plain identifier
                 if !self.at(TokenKind::ParenOpen) {
-                    return Ok(Expr::Ident(name));
+                    return Ok(Expr::Identifier(name));
                 }
 
                 // Function call

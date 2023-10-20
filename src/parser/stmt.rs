@@ -1,5 +1,5 @@
 use crate::error::BauResult;
-use crate::parser::ast::{BlockKind, Stmt};
+use crate::parser::ast::{BlockKind, Stmt, Type};
 use crate::parser::Parser;
 use crate::tokenizer::token::TokenKind;
 
@@ -26,13 +26,16 @@ impl Parser<'_> {
 
     pub fn parse_let_statement(&mut self) -> BauResult<Stmt> {
         self.consume_specific(TokenKind::Let)?;
-        let ident = self.consume_specific(TokenKind::Identifier)?;
-        let name = self.text(ident).to_string();
+        let type_ident = self.consume_specific(TokenKind::Identifier)?;
+        let var_type = self.text(type_ident).to_string();
+        let name_ident = self.consume_specific(TokenKind::Identifier)?;
+        let name = self.text(name_ident).to_string();
         self.consume_specific(TokenKind::Equals)?;
         let value = self.parse_expression()?;
         self.consume_specific(TokenKind::Semicolon)?;
         Ok(Stmt::Let {
             name,
+            var_type: Type { name: var_type },
             expr: Box::new(value),
         })
     }

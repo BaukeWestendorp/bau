@@ -39,6 +39,7 @@ pub enum BlockKind {
 pub enum Stmt {
     Let {
         name: String,
+        var_type: Type,
         expr: Box<Expr>,
     },
     Assignment {
@@ -82,4 +83,9 @@ pub enum Item {
         parameters: Vec<String>,
         body: Stmt,
     },
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Type {
+    pub name: String,
 }

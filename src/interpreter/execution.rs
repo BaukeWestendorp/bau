@@ -2,7 +2,7 @@ use crate::error::BauResult;
 use crate::execution_error;
 use crate::interpreter::scope::{ControlFlow, Scope};
 use crate::interpreter::value::Value;
-use crate::interpreter::Interpreter;
+use crate::interpreter::{Interpreter, Variable};
 use crate::parser::ast::{Expr, Item, Literal, Stmt};
 use crate::tokenizer::token::TokenKind;
 
@@ -53,9 +53,18 @@ impl Interpreter {
 
     pub fn execute_let_statement(&mut self, statement: &Stmt) -> BauResult<()> {
         match statement {
-            Stmt::Let { name, expr } => {
+            Stmt::Let {
+                name,
+                expr,
+                var_type,
+            } => {
                 let initial_value = self.execute_expression(expr)?;
-                self.variables.insert(name.clone(), initial_value);
+                let var = Variable {
+                    name: name.clone(),
+                    var_type: var_type.clone(),
+                    value: initial_value.clone(),
+                };
+                self.variables.insert(name.clone(), var);
                 Ok(())
             }
             _ => panic!("Expected let statement"),
@@ -69,7 +78,7 @@ impl Interpreter {
                 if !self.variables.contains_key(name) {
                     return execution_error!("No variable found with name: `{}`", name);
                 }
-                self.variables.insert(name.clone(), value);
+                self.set_variable_value(name, value);
                 Ok(())
             }
             _ => panic!("Expected assignment statement"),
@@ -197,7 +206,7 @@ impl Interpreter {
 
     pub fn execute_identifier_expression(&mut self, ident: &str) -> BauResult<Value> {
         match self.variables.get(ident) {
-            Some(value) => Ok(value.clone()),
+            Some(var) => Ok(var.value.clone()),
             None => execution_error!("No variable found with name: `{}`", ident),
         }
     }

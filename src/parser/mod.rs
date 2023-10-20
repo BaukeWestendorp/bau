@@ -87,7 +87,10 @@ impl<'source> Parser<'source> {
         let current = self.peek();
 
         if current.kind == TokenKind::Error {
-            return Err(self.error(format!("Invalid token: `{}`", current.kind)));
+            return Err(self.error(format!(
+                "Unknown token `{}`",
+                current.text(&self.source.text())
+            )));
         }
 
         if current.kind != expected {

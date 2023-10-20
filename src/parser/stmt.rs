@@ -1,5 +1,5 @@
 use crate::error::BauResult;
-use crate::parser::ast::Stmt;
+use crate::parser::ast::{BlockKind, Stmt};
 use crate::parser::Parser;
 use crate::tokenizer::token::TokenKind;
 
@@ -12,7 +12,7 @@ impl Parser<'_> {
             TokenKind::Return => self.parse_return_statement(),
             TokenKind::Continue => self.parse_continue_statement(),
             TokenKind::Break => self.parse_break_statement(),
-            TokenKind::BraceOpen => self.parse_block_statement(),
+            TokenKind::BraceOpen => self.parse_block_statement(BlockKind::Regular),
             TokenKind::Identifier => {
                 let next = self.peek_offset_kind(1);
                 match next {
@@ -40,10 +40,10 @@ impl Parser<'_> {
     pub fn parse_if_statement(&mut self) -> BauResult<Stmt> {
         self.consume_specific(TokenKind::If)?;
         let condition = self.parse_expression()?;
-        let then_branch = self.parse_block_statement()?;
+        let then_branch = self.parse_block_statement(BlockKind::Regular)?;
         let else_branch = if self.at(TokenKind::Else) {
             self.consume_specific(TokenKind::Else)?;
-            Some(Box::new(self.parse_block_statement()?))
+            Some(Box::new(self.parse_block_statement(BlockKind::Regular)?))
         } else {
             None
         };
@@ -57,7 +57,7 @@ impl Parser<'_> {
     pub fn parse_loop_statement(&mut self) -> BauResult<Stmt> {
         self.consume_specific(TokenKind::Loop)?;
 
-        let body = self.parse_block_statement()?;
+        let body = self.parse_block_statement(BlockKind::Loop)?;
         Ok(Stmt::Loop {
             body: Box::new(body),
         })
@@ -91,7 +91,7 @@ impl Parser<'_> {
         Ok(Stmt::Break)
     }
 
-    pub fn parse_block_statement(&mut self) -> BauResult<Stmt> {
+    pub fn parse_block_statement(&mut self, block_kind: BlockKind) -> BauResult<Stmt> {
         self.consume_specific(TokenKind::BraceOpen)?;
         let mut statements = vec![];
         while !self.at(TokenKind::BraceClose) {
@@ -99,7 +99,10 @@ impl Parser<'_> {
             statements.push(statement);
         }
         self.consume_specific(TokenKind::BraceClose)?;
-        Ok(Stmt::Block { statements })
+        Ok(Stmt::Block {
+            statements,
+            block_kind,
+        })
     }
 
     pub fn parse_assignment_statement(&mut self) -> BauResult<Stmt> {

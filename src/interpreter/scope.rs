@@ -1,4 +1,5 @@
 use crate::interpreter::value::Value;
+use crate::parser::ast::BlockKind;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ControlFlow {
@@ -10,4 +11,5 @@ pub enum ControlFlow {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Scope {
     pub control_flow: Option<ControlFlow>,
+    pub block_kind: BlockKind,
 }

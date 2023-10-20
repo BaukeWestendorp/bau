@@ -28,6 +28,13 @@ pub enum Expr {
     },
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum BlockKind {
+    Regular,
+    Loop,
+    Function,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum Stmt {
     Let {
@@ -47,6 +54,7 @@ pub enum Stmt {
         body: Box<Stmt>,
     },
     Block {
+        block_kind: BlockKind,
         statements: Vec<Stmt>,
     },
     Return {

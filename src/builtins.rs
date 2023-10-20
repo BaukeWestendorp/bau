@@ -1,7 +1,7 @@
 use crate::error::BauResult;
 use crate::interpreter::value::Value;
 use crate::interpreter::Interpreter;
-use crate::parser::ast::Stmt;
+use crate::parser::ast::{BlockKind, Stmt};
 use crate::parser::ast::{Expr, Item};
 use lazy_static::lazy_static;
 
@@ -10,7 +10,10 @@ lazy_static! {
         function: Item::Function {
             name: "print".to_string(),
             parameters: vec![],
-            body: Stmt::Block { statements: vec![] },
+            body: Stmt::Block {
+                statements: vec![],
+                block_kind: BlockKind::Function
+            },
         },
         action: builtin_print,
     },];

@@ -99,8 +99,14 @@ impl Interpreter {
 
     pub fn execute_block_statement(&mut self, statement: &Stmt) -> BauResult<Option<ControlFlow>> {
         match statement {
-            Stmt::Block { statements } => {
-                self.scope_stack.push(Scope { control_flow: None });
+            Stmt::Block {
+                statements,
+                block_kind,
+            } => {
+                self.scope_stack.push(Scope {
+                    control_flow: None,
+                    block_kind: *block_kind,
+                });
                 for statement in statements {
                     self.execute_statement(statement)?;
                     if self.control_flow_should_break() {

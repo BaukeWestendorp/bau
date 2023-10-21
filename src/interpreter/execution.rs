@@ -1,19 +1,27 @@
 use crate::error::BauResult;
-use crate::execution_error;
 use crate::interpreter::scope::{ControlFlow, Scope};
 use crate::interpreter::value::Value;
 use crate::interpreter::{Interpreter, Variable};
-use crate::parser::ast::{Expr, Item, Literal, Stmt};
+use crate::parser::ast::{Expr, ExprKind, Item, Literal, Stmt};
 use crate::tokenizer::token::TokenKind;
+
+macro_rules! execution_error {
+    ($($message:tt)*) => {
+        Err(crate::error::BauError::ExecutionError {
+            message: format!($($message)*),
+        })
+    };
+}
 
 impl Interpreter {
     pub fn execute_main(&mut self) -> BauResult<()> {
-        match self.main_function()?.clone() {
-            main @ Item::Function { .. } => {
+        match self.main_function().cloned() {
+            Some(main) => {
                 self.execute_function(&main, &vec![])?;
+                Ok(())
             }
+            None => execution_error!("No main function found"),
         }
-        Ok(())
     }
 
     pub fn execute_function(
@@ -181,17 +189,17 @@ impl Interpreter {
         }
     }
 
-    pub fn execute_expression(&mut self, expression: &Expr) -> BauResult<Value> {
-        match expression {
-            Expr::Literal(literal) => self.execute_literal_expression(literal),
-            Expr::Identifier(identifier) => self.execute_identifier_expression(identifier),
-            Expr::FnCall { .. } => self.execute_function_call_expression(expression),
-            Expr::PrefixOp { .. } => self.execute_prefix_operator_expression(expression),
-            Expr::InfixOp { .. } => self.execute_infix_operator_expression(expression),
-            Expr::PostfixOp { .. } => {
+    pub fn execute_expression(&mut self, expr: &Expr) -> BauResult<Value> {
+        match &expr.kind {
+            ExprKind::Literal(literal) => self.execute_literal_expression(literal),
+            ExprKind::Identifier(identifier) => self.execute_identifier_expression(identifier),
+            ExprKind::FnCall { .. } => self.execute_function_call_expression(expr),
+            ExprKind::PrefixOp { .. } => self.execute_prefix_operator_expression(expr),
+            ExprKind::InfixOp { .. } => self.execute_infix_operator_expression(expr),
+            ExprKind::PostfixOp { .. } => {
                 execution_error!("PostfixOp expression execution not implemented")
             }
-            Expr::BuiltinFnCall { function, args } => function.call(self, args),
+            ExprKind::BuiltinFnCall { function, args } => function.call(self, args),
         }
     }
 
@@ -212,8 +220,8 @@ impl Interpreter {
     }
 
     pub fn execute_function_call_expression(&mut self, function_call: &Expr) -> BauResult<Value> {
-        match function_call {
-            Expr::FnCall { name, args } => {
+        match &function_call.kind {
+            ExprKind::FnCall { name, args } => {
                 let function = match self.functions.get(name) {
                     Some(function) => function.clone(),
                     None => return execution_error!("No function found with name: `{}`", name),
@@ -227,8 +235,8 @@ impl Interpreter {
     }
 
     pub fn execute_prefix_operator_expression(&mut self, prefix_op: &Expr) -> BauResult<Value> {
-        match prefix_op {
-            Expr::PrefixOp { op, expr } => {
+        match &prefix_op.kind {
+            ExprKind::PrefixOp { op, expr } => {
                 let value = self.execute_expression(expr)?;
                 match op {
                     TokenKind::Plus => Ok(value),
@@ -249,76 +257,76 @@ impl Interpreter {
     }
 
     pub fn execute_infix_operator_expression(&mut self, infix_op: &Expr) -> BauResult<Value> {
-        match infix_op {
-            Expr::InfixOp { op, left, right } => {
-                let left = self.execute_expression(left)?;
-                let right = self.execute_expression(right)?;
+        match &infix_op.kind {
+            ExprKind::InfixOp { op, lhs, rhs } => {
+                let lhs = self.execute_expression(lhs)?;
+                let rhs = self.execute_expression(rhs)?;
                 match op {
-                    TokenKind::Plus => match (left, right) {
-                        (Value::Int(left), Value::Int(right)) => Ok(Value::Int(left + right)),
-                        (Value::Float(left), Value::Float(right)) => Ok(Value::Float(left + right)),
-                        (Value::String(left), Value::String(right)) => {
-                            Ok(Value::String(format!("{}{}", left, right)))
+                    TokenKind::Plus => match (lhs, rhs) {
+                        (Value::Int(lhs), Value::Int(rhs)) => Ok(Value::Int(lhs + rhs)),
+                        (Value::Float(lhs), Value::Float(rhs)) => Ok(Value::Float(lhs + rhs)),
+                        (Value::String(lhs), Value::String(rhs)) => {
+                            Ok(Value::String(format!("{}{}", lhs, rhs)))
                         }
                         _ => execution_error!(
                             "Addition is only available between ints, floats and strings"
                         ),
                     },
-                    TokenKind::Minus => match (left, right) {
-                        (Value::Int(left), Value::Int(right)) => Ok(Value::Int(left - right)),
-                        (Value::Float(left), Value::Float(right)) => Ok(Value::Float(left - right)),
+                    TokenKind::Minus => match (lhs, rhs) {
+                        (Value::Int(lhs), Value::Int(rhs)) => Ok(Value::Int(lhs - rhs)),
+                        (Value::Float(lhs), Value::Float(rhs)) => Ok(Value::Float(lhs - rhs)),
                         _ => execution_error!(
                             "Subtraction is only available between ints and floats"
                         ),
                     },
-                    TokenKind::Asterisk => match (left, right) {
-                        (Value::Int(left), Value::Int(right)) => Ok(Value::Int(left * right)),
-                        (Value::Float(left), Value::Float(right)) => Ok(Value::Float(left * right)),
+                    TokenKind::Asterisk => match (lhs, rhs) {
+                        (Value::Int(lhs), Value::Int(rhs)) => Ok(Value::Int(lhs * rhs)),
+                        (Value::Float(lhs), Value::Float(rhs)) => Ok(Value::Float(lhs * rhs)),
                         _ => execution_error!(
                             "Multiplication is only available between ints and floats"
                         ),
                     },
-                    TokenKind::Slash => match (left, right) {
-                        (Value::Int(left), Value::Int(right)) => Ok(Value::Int(left / right)),
-                        (Value::Float(left), Value::Float(right)) => Ok(Value::Float(left / right)),
+                    TokenKind::Slash => match (lhs, rhs) {
+                        (Value::Int(lhs), Value::Int(rhs)) => Ok(Value::Int(lhs / rhs)),
+                        (Value::Float(lhs), Value::Float(rhs)) => Ok(Value::Float(lhs / rhs)),
                         _ => execution_error!("Division is only available between ints and floats"),
                     },
-                    TokenKind::EqualsEquals => Ok(Value::Bool(left == right)),
-                    TokenKind::ExclamationMarkEquals => Ok(Value::Bool(left != right)),
-                    TokenKind::LessThan => match (left, right) {
-                        (Value::Int(left), Value::Int(right)) => Ok(Value::Bool(left < right)),
-                        (Value::Float(left), Value::Float(right)) => Ok(Value::Bool(left < right)),
+                    TokenKind::EqualsEquals => Ok(Value::Bool(lhs == rhs)),
+                    TokenKind::ExclamationMarkEquals => Ok(Value::Bool(lhs != rhs)),
+                    TokenKind::LessThan => match (lhs, rhs) {
+                        (Value::Int(lhs), Value::Int(rhs)) => Ok(Value::Bool(lhs < rhs)),
+                        (Value::Float(lhs), Value::Float(rhs)) => Ok(Value::Bool(lhs < rhs)),
                         _ => {
                             execution_error!("Less than is only available between ints and floats")
                         }
                     },
-                    TokenKind::LessThanEquals => match (left, right) {
-                        (Value::Int(left), Value::Int(right)) => Ok(Value::Bool(left <= right)),
-                        (Value::Float(left), Value::Float(right)) => Ok(Value::Bool(left <= right)),
+                    TokenKind::LessThanEquals => match (lhs, rhs) {
+                        (Value::Int(lhs), Value::Int(rhs)) => Ok(Value::Bool(lhs <= rhs)),
+                        (Value::Float(lhs), Value::Float(rhs)) => Ok(Value::Bool(lhs <= rhs)),
                         _ => execution_error!(
                             "Less than or equals is only available between ints and floats"
                         ),
                     },
-                    TokenKind::GreaterThan => match (left, right) {
-                        (Value::Int(left), Value::Int(right)) => Ok(Value::Bool(left > right)),
-                        (Value::Float(left), Value::Float(right)) => Ok(Value::Bool(left > right)),
+                    TokenKind::GreaterThan => match (lhs, rhs) {
+                        (Value::Int(lhs), Value::Int(rhs)) => Ok(Value::Bool(lhs > rhs)),
+                        (Value::Float(lhs), Value::Float(rhs)) => Ok(Value::Bool(lhs > rhs)),
                         _ => execution_error!(
                             "Greater than is only available between ints and floats"
                         ),
                     },
-                    TokenKind::GreaterThanEquals => match (left, right) {
-                        (Value::Int(left), Value::Int(right)) => Ok(Value::Bool(left >= right)),
-                        (Value::Float(left), Value::Float(right)) => Ok(Value::Bool(left >= right)),
+                    TokenKind::GreaterThanEquals => match (lhs, rhs) {
+                        (Value::Int(lhs), Value::Int(rhs)) => Ok(Value::Bool(lhs >= rhs)),
+                        (Value::Float(lhs), Value::Float(rhs)) => Ok(Value::Bool(lhs >= rhs)),
                         _ => execution_error!(
                             "Greater than or equals is only available between ints and floats"
                         ),
                     },
-                    TokenKind::AmpersandAmpersand => match (left, right) {
-                        (Value::Bool(left), Value::Bool(right)) => Ok(Value::Bool(left && right)),
+                    TokenKind::AmpersandAmpersand => match (lhs, rhs) {
+                        (Value::Bool(lhs), Value::Bool(rhs)) => Ok(Value::Bool(lhs && rhs)),
                         _ => execution_error!("Logical and is only available between bools"),
                     },
-                    TokenKind::PipePipe => match (left, right) {
-                        (Value::Bool(left), Value::Bool(right)) => Ok(Value::Bool(left || right)),
+                    TokenKind::PipePipe => match (lhs, rhs) {
+                        (Value::Bool(lhs), Value::Bool(rhs)) => Ok(Value::Bool(lhs || rhs)),
                         _ => execution_error!("Logical or is only available between bools"),
                     },
                     _ => execution_error!("Invalid infix operator: `{}`", op),

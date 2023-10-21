@@ -105,8 +105,12 @@ impl<'source> Parser<'source> {
 
     fn error(&mut self, message: String) -> BauError {
         BauError::ParserError {
-            token: self.peek(),
+            span: self.peek().span,
             message,
         }
+    }
+
+    pub(crate) fn current_char_cursor(&mut self) -> usize {
+        self.peek().span.start
     }
 }

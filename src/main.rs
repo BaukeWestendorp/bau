@@ -1,3 +1,4 @@
+use crate::error::BauResult;
 use crate::parser::source::Source;
 use clap::Parser;
 
@@ -6,6 +7,7 @@ pub mod error;
 pub mod interpreter;
 pub mod parser;
 pub mod tokenizer;
+pub mod typechecker;
 
 #[derive(clap::Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -24,20 +26,37 @@ fn main() {
         }
     };
 
-    let mut parser = parser::Parser::new(&source);
-    let top_level = parser.parse_top_level();
-
-    match top_level {
+    match run(&source) {
+        Ok(_) => {}
         Err(error) => error.log(&source),
-        Ok(top_level) => {
-            let mut interpreter = interpreter::Interpreter::new();
-            match interpreter.evaluate_top_level(top_level) {
-                Err(error) => error.log(&source),
-                Ok(_) => match interpreter.execute_main() {
-                    Err(error) => error.log(&source),
-                    Ok(_) => {}
-                },
-            }
-        }
     }
+
+    // match top_level {
+    //     Err(error) => error.log(&source),
+    //     Ok(top_level) => {
+    //         let mut interpreter = interpreter::Interpreter::new();
+    //         match interpreter.evaluate_top_level(top_level) {
+    //             Err(error) => error.log(&source),
+    //             Ok(_) => match interpreter.execute_main() {
+    //                 Err(error) => error.log(&source),
+    //                 Ok(_) => {}
+    //             },
+    //         }
+    //     }
+    // }
+}
+
+fn run(source: &Source) -> BauResult<()> {
+    let mut parser = parser::Parser::new(source);
+    let top_level = parser.parse_top_level()?;
+
+    let typechecker = typechecker::Typechecker::new();
+    typechecker.check_top_level(&top_level)?;
+
+    let mut interpreter = interpreter::Interpreter::new();
+    interpreter.evaluate_top_level(top_level)?;
+
+    interpreter.execute_main()?;
+
+    Ok(())
 }

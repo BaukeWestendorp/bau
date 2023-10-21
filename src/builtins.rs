@@ -1,8 +1,8 @@
 use crate::error::BauResult;
 use crate::interpreter::value::Value;
 use crate::interpreter::Interpreter;
-use crate::parser::ast::{BlockKind, Stmt};
-use crate::parser::ast::{Expr, Item};
+use crate::parser::ast::{BlockKind, Expr, Stmt};
+use crate::parser::ast::{ExprKind, Item};
 use lazy_static::lazy_static;
 
 lazy_static! {

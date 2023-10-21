@@ -1,46 +1,19 @@
 use crate::parser::source::Source;
-use crate::tokenizer::token::Token;
+use crate::tokenizer::token::{Span, Token};
 use colored::Colorize;
-
-#[macro_export]
-macro_rules! execution_error {
-    ($($message:tt)*) => {
-        Err(crate::error::BauError::ExecutionError {
-            message: format!($($message)*),
-        })
-    };
-}
-
-#[macro_export]
-macro_rules! interpreter_error {
-    ($($message:tt)*) => {
-        Err(crate::error::BauError::ExecutionError {
-            message: format!($($message)*),
-        })
-    };
-}
-
-#[macro_export]
-macro_rules! parser_error {
-    ($token:expr, $($message:tt)*) => {
-        Err(crate::error::BauError::ParserError {
-            token: $token,
-            message: format!($($message)*),
-        })
-    };
-}
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum BauError {
-    ParserError { token: Token, message: String },
-    InterpreterError { message: String },
+    ParserError { span: Span, message: String },
     ExecutionError { message: String },
+    TypecheckerError { span: Span, message: String },
 }
 
 impl BauError {
     pub fn log(&self, source: &Source) {
         match self {
-            BauError::ParserError { token, message } => {
+            BauError::ParserError { span, message }
+            | BauError::TypecheckerError { span, message } => {
                 let print_line_gutter = |line_number: Option<usize>| {
                     match line_number {
                         Some(line_number) => {
@@ -61,7 +34,7 @@ impl BauError {
                     eprintln!("{}{}{}", start.white(), mid_error.bright_red(), end.white());
                 };
 
-                let (line, column) = source.line_and_column(token.span.start);
+                let (line, column) = source.line_and_column(span.start);
                 eprintln!("{}: {}", "error".bright_red(), message);
                 eprintln!(
                     "{}{} {}:{}:{}",
@@ -71,13 +44,10 @@ impl BauError {
                     line,
                     column
                 );
-                print_line(line, column, token.span.len());
+                print_line(line, column, span.len());
                 print_line_gutter(None);
                 eprint!("{: <1$}", "", column - 1);
                 eprintln!("{}{}", "^ ".bright_red(), message.bright_red());
-            }
-            BauError::InterpreterError { message } => {
-                eprintln!("Error: {}", message);
             }
             BauError::ExecutionError { message } => {
                 eprintln!("Error: {}", message);

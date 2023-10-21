@@ -1,8 +1,8 @@
 use crate::builtins;
 use crate::error::BauResult;
-use crate::parser::ast::{Expr, Literal};
+use crate::parser::ast::{Expr, ExprKind, Literal};
 use crate::parser::Parser;
-use crate::tokenizer::token::TokenKind;
+use crate::tokenizer::token::{Span, TokenKind};
 
 trait Operator {
     fn prefix_binding_power(&self) -> ((), u8);
@@ -39,11 +39,23 @@ impl Operator for TokenKind {
 }
 
 impl Parser<'_> {
+    fn create_expr(&mut self, cursor_start: usize, kind: ExprKind) -> Expr {
+        Expr {
+            kind,
+            span: Span {
+                start: cursor_start,
+                end: self.current_char_cursor(),
+            },
+        }
+    }
+
     pub fn parse_expression(&mut self) -> BauResult<Expr> {
         self.parse_pratt_expression(0)
     }
 
     pub fn parse_pratt_expression(&mut self, min_binding_power: u8) -> BauResult<Expr> {
+        let cursor_start = self.current_char_cursor();
+
         let mut lhs = self.parse_primary_expression()?;
 
         loop {
@@ -70,11 +82,14 @@ impl Parser<'_> {
 
                 self.consume_specific(op)?;
                 let rhs = self.parse_pratt_expression(right_binding_power)?;
-                lhs = Expr::InfixOp {
-                    left: Box::new(lhs),
-                    op,
-                    right: Box::new(rhs),
-                };
+                lhs = self.create_expr(
+                    cursor_start,
+                    ExprKind::InfixOp {
+                        op,
+                        lhs: Box::new(lhs),
+                        rhs: Box::new(rhs),
+                    },
+                );
 
                 continue;
             }
@@ -85,6 +100,8 @@ impl Parser<'_> {
     }
 
     pub fn parse_primary_expression(&mut self) -> BauResult<Expr> {
+        let cursor_start = self.current_char_cursor();
+
         match self.peek_kind() {
             TokenKind::IntLiteral | TokenKind::FloatLiteral | TokenKind::StringLiteral => {
                 self.parse_literal_expression()
@@ -97,7 +114,7 @@ impl Parser<'_> {
 
                 // Plain identifier
                 if !self.at(TokenKind::ParenOpen) {
-                    return Ok(Expr::Identifier(name));
+                    return Ok(self.create_expr(cursor_start, ExprKind::Identifier(name)));
                 }
 
                 // Function call
@@ -113,10 +130,12 @@ impl Parser<'_> {
                 self.consume_specific(TokenKind::ParenClose)?;
 
                 if let Some(function) = builtins::from_name(&name) {
-                    return Ok(Expr::BuiltinFnCall { function, args });
+                    return Ok(
+                        self.create_expr(cursor_start, ExprKind::BuiltinFnCall { function, args })
+                    );
                 }
 
-                Ok(Expr::FnCall { name, args })
+                Ok(self.create_expr(cursor_start, ExprKind::FnCall { name, args }))
             }
             TokenKind::ParenOpen => {
                 self.consume_specific(TokenKind::ParenOpen)?;
@@ -134,6 +153,7 @@ impl Parser<'_> {
     }
 
     pub fn parse_literal_expression(&mut self) -> BauResult<Expr> {
+        let cursor_start = self.current_char_cursor();
         let literal = self.peek_kind();
         let text = {
             let token = self.consume().expect("Expected literal");
@@ -151,15 +171,19 @@ impl Parser<'_> {
             TokenKind::StringLiteral => Literal::String(text.to_string()),
             _ => unreachable!(),
         };
-        Ok(Expr::Literal(literal))
+        Ok(self.create_expr(cursor_start, ExprKind::Literal(literal)))
     }
 
     pub fn parse_prefix_operator_expression(&mut self) -> BauResult<Expr> {
+        let cursor_start = self.current_char_cursor();
         let op = self.consume().expect("Expected operator").kind;
         let expr = self.parse_pratt_expression(0)?;
-        Ok(Expr::PrefixOp {
-            op,
-            expr: Box::new(expr),
-        })
+        Ok(self.create_expr(
+            cursor_start,
+            ExprKind::PrefixOp {
+                op,
+                expr: Box::new(expr),
+            },
+        ))
     }
 }

@@ -1,6 +1,4 @@
 use crate::builtins::BUILTIN_FUNCTIONS;
-use crate::error::BauResult;
-use crate::execution_error;
 use crate::interpreter::scope::{ControlFlow, Scope};
 use crate::interpreter::value::Value;
 use crate::parser::ast::{BlockKind, Item, Type};
@@ -38,11 +36,8 @@ impl Interpreter {
         }
     }
 
-    pub fn main_function(&self) -> BauResult<&Item> {
-        match self.functions.get(MAIN_FUNCTION_NAME) {
-            Some(main) => Ok(main),
-            None => execution_error!("No main function found"),
-        }
+    pub fn main_function(&self) -> Option<&Item> {
+        self.functions.get(MAIN_FUNCTION_NAME)
     }
 
     pub fn set_variable_value(&mut self, name: &str, value: Value) {

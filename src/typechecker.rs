@@ -65,13 +65,13 @@ impl Typechecker {
         match statement {
             Stmt::Let { .. } => self.check_let_statement(statement),
             Stmt::Assignment { .. } => self.check_assignment_statement(statement),
-            Stmt::If { .. } => todo!("Typechecking If statement not implemented"),
+            Stmt::If { .. } => self.check_if_statement(statement),
             Stmt::Loop { .. } => todo!("Typechecking Loop statement not implemented"),
             Stmt::Block { .. } => todo!("Typechecking Block statement not implemented"),
             Stmt::Return { .. } => todo!("Typechecking Return statement not implemented"),
             Stmt::Continue => todo!("Typechecking Continue statement not implemented"),
             Stmt::Break => todo!("Typechecking Break statement not implemented"),
-            Stmt::Expression { .. } => todo!("Typechecking Expression statement not implemented"),
+            Stmt::Expression { .. } => self.check_expression_statement(statement),
         }
     }
 
@@ -118,16 +118,41 @@ impl Typechecker {
         }
     }
 
+    pub fn check_if_statement(&self, statement: &Stmt) -> BauResult<()> {
+        match statement {
+            Stmt::If { condition, .. } => {
+                let condition_type = self.get_type_from_expression(condition)?;
+                if condition_type != Type::bool() {
+                    return typechecker_error!(
+                        condition.span,
+                        "The condition of an if statement should express a boolean value. Found `{}`",
+                        condition_type
+                    );
+                }
+                Ok(())
+            }
+            _ => panic!("Expected If statement"),
+        }
+    }
+
+    pub fn check_expression_statement(&self, stmt: &Stmt) -> BauResult<()> {
+        match stmt {
+            Stmt::Expression { expr } => {
+                self.get_type_from_expression(expr)?;
+                Ok(())
+            }
+            _ => panic!("Expected Expression statement"),
+        }
+    }
+
     pub fn get_type_from_expression(&self, expr: &Expr) -> BauResult<Type> {
         match &expr.kind {
             ExprKind::Literal(literal) => Ok(self.get_type_from_literal(literal)),
             ExprKind::Identifier(_) => todo!("Getting type from Identifier not implemented"),
-            ExprKind::BuiltinFnCall { .. } => {
-                todo!("Getting type from BuiltinFnCall not implemented")
-            }
+            ExprKind::BuiltinFnCall { .. } => Ok(Type::unit()),
             ExprKind::FnCall { .. } => todo!("Getting type from FnCall not implemented"),
             ExprKind::PrefixOp { .. } => todo!("Getting type from PrefixOp not implemented"),
-            ExprKind::InfixOp { .. } => todo!("Getting type from InfixOp not implemented"),
+            ExprKind::InfixOp { .. } => self.get_type_from_infix_operator(expr),
             ExprKind::PostfixOp { .. } => todo!("Getting type from PostfixOp not implemented"),
         }
     }
@@ -138,6 +163,25 @@ impl Typechecker {
             Literal::Float(_) => Type::float(),
             Literal::String(_) => Type::string(),
             Literal::Bool(_) => Type::bool(),
+        }
+    }
+
+    pub fn get_type_from_infix_operator(&self, infix_op: &Expr) -> BauResult<Type> {
+        match &infix_op.kind {
+            ExprKind::InfixOp { lhs, rhs, .. } => {
+                let lhs_type = self.get_type_from_expression(&lhs)?;
+                let rhs_type = self.get_type_from_expression(&rhs)?;
+                if lhs_type != rhs_type {
+                    return typechecker_error!(
+                        infix_op.span,
+                        "Type mismatch: expected `{}`, found `{}`",
+                        lhs_type,
+                        rhs_type
+                    );
+                }
+                Ok(Type::bool())
+            }
+            _ => panic!("Expected InfixOp expression"),
         }
     }
 }

@@ -97,6 +97,11 @@ pub struct Type {
     pub name: String,
 }
 impl Type {
+    pub fn unit() -> Type {
+        Type {
+            name: "()".to_string(),
+        }
+    }
     pub fn int() -> Type {
         Type {
             name: "int".to_string(),

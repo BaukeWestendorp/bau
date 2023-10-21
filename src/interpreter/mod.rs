@@ -1,7 +1,7 @@
 use crate::builtins::BUILTIN_FUNCTIONS;
 use crate::interpreter::scope::{ControlFlow, Scope};
 use crate::interpreter::value::Value;
-use crate::parser::ast::{BlockKind, Item, Type};
+use crate::parser::ast::{BlockKind, Item};
 use std::collections::HashMap;
 
 pub mod evaluation;
@@ -9,15 +9,9 @@ pub mod execution;
 pub mod scope;
 pub mod value;
 
-pub struct Variable {
-    name: String,
-    var_type: Type,
-    value: Value,
-}
-
 pub struct Interpreter {
     functions: HashMap<String, Item>,
-    variables: HashMap<String, Variable>,
+    variables: HashMap<String, Value>,
     scope_stack: Vec<Scope>,
 }
 
@@ -42,7 +36,7 @@ impl Interpreter {
 
     pub fn set_variable_value(&mut self, name: &str, value: Value) {
         if let Some(variable) = self.variables.get_mut(name) {
-            variable.value = value;
+            *variable = value;
         }
     }
 

@@ -30,27 +30,13 @@ fn main() {
         Ok(_) => {}
         Err(error) => error.log(&source),
     }
-
-    // match top_level {
-    //     Err(error) => error.log(&source),
-    //     Ok(top_level) => {
-    //         let mut interpreter = interpreter::Interpreter::new();
-    //         match interpreter.evaluate_top_level(top_level) {
-    //             Err(error) => error.log(&source),
-    //             Ok(_) => match interpreter.execute_main() {
-    //                 Err(error) => error.log(&source),
-    //                 Ok(_) => {}
-    //             },
-    //         }
-    //     }
-    // }
 }
 
 fn run(source: &Source) -> BauResult<()> {
     let mut parser = parser::Parser::new(source);
     let top_level = parser.parse_top_level()?;
 
-    let typechecker = typechecker::Typechecker::new();
+    let mut typechecker = typechecker::Typechecker::new();
     typechecker.check_top_level(&top_level)?;
 
     let mut interpreter = interpreter::Interpreter::new();

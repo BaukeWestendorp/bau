@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use crate::error::BauResult;
 use crate::parser::ast::{Expr, ExprKind, Item, Literal, Stmt, Type};
 
@@ -10,14 +12,28 @@ macro_rules! typechecker_error {
     };
 }
 
-pub struct Typechecker;
+pub struct Typechecker {
+    types: HashMap<String, Type>,
+}
 
 impl Typechecker {
     pub fn new() -> Self {
-        Self {}
+        Self {
+            types: HashMap::new(),
+        }
     }
 
-    pub fn check_top_level(&self, top_level: &Vec<Item>) -> BauResult<()> {
+    pub fn get_type(&self, variable_name: String) -> &Type {
+        self.types
+            .get(&variable_name)
+            .expect(format!("Type not found for variable with name `{}`", variable_name).as_str())
+    }
+
+    pub fn set_type(&mut self, variable_name: String, var_type: Type) {
+        self.types.insert(variable_name, var_type);
+    }
+
+    pub fn check_top_level(&mut self, top_level: &Vec<Item>) -> BauResult<()> {
         let mut last_result = Ok(());
         for item in top_level {
             last_result = match item {
@@ -31,7 +47,7 @@ impl Typechecker {
         last_result
     }
 
-    pub fn check_function_item(&self, function: &Item) -> BauResult<()> {
+    pub fn check_function_item(&mut self, function: &Item) -> BauResult<()> {
         match &function {
             Item::Function { body, .. } => match body {
                 Stmt::Block { statements, .. } => {
@@ -45,12 +61,10 @@ impl Typechecker {
         }
     }
 
-    pub fn check_statement(&self, statement: &Stmt) -> BauResult<()> {
+    pub fn check_statement(&mut self, statement: &Stmt) -> BauResult<()> {
         match statement {
             Stmt::Let { .. } => self.check_let_statement(statement),
-            Stmt::Assignment { .. } => {
-                todo!("Typechecking Assignment statement not implemented")
-            }
+            Stmt::Assignment { .. } => self.check_assignment_statement(statement),
             Stmt::If { .. } => todo!("Typechecking If statement not implemented"),
             Stmt::Loop { .. } => todo!("Typechecking Loop statement not implemented"),
             Stmt::Block { .. } => todo!("Typechecking Block statement not implemented"),
@@ -61,10 +75,35 @@ impl Typechecker {
         }
     }
 
-    pub fn check_let_statement(&self, statement: &Stmt) -> BauResult<()> {
+    pub fn check_let_statement(&mut self, statement: &Stmt) -> BauResult<()> {
         match statement {
-            Stmt::Let { var_type, expr, .. } => {
+            Stmt::Let {
+                var_type,
+                expr,
+                name,
+            } => {
                 let expr_type = self.get_type_from_expression(expr)?;
+                if var_type != &expr_type {
+                    return typechecker_error!(
+                        expr.span,
+                        "Type mismatch: expected `{}`, found `{}`",
+                        var_type,
+                        expr_type
+                    );
+                }
+
+                self.set_type(name.clone(), var_type.clone());
+                Ok(())
+            }
+            _ => panic!("Expected Let statement"),
+        }
+    }
+
+    pub fn check_assignment_statement(&self, statement: &Stmt) -> BauResult<()> {
+        match statement {
+            Stmt::Assignment { expr, name } => {
+                let expr_type = self.get_type_from_expression(expr)?;
+                let var_type = self.get_type(name.clone());
                 if var_type != &expr_type {
                     return typechecker_error!(
                         expr.span,
@@ -75,14 +114,14 @@ impl Typechecker {
                 }
                 Ok(())
             }
-            _ => panic!("Expected Let statemnet"),
+            _ => panic!("Expected Assignment statement"),
         }
     }
 
     pub fn get_type_from_expression(&self, expr: &Expr) -> BauResult<Type> {
         match &expr.kind {
             ExprKind::Literal(literal) => Ok(self.get_type_from_literal(literal)),
-            ExprKind::Identifier(_) => todo!("Getting type from Identifiernot implemented"),
+            ExprKind::Identifier(_) => todo!("Getting type from Identifier not implemented"),
             ExprKind::BuiltinFnCall { .. } => {
                 todo!("Getting type from BuiltinFnCall not implemented")
             }

@@ -1,5 +1,5 @@
 use crate::parser::source::Source;
-use crate::tokenizer::token::{Span, Token};
+use crate::tokenizer::token::Span;
 use colored::Colorize;
 
 #[derive(Debug, Clone, PartialEq)]

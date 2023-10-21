@@ -103,9 +103,10 @@ impl Parser<'_> {
         let cursor_start = self.current_char_cursor();
 
         match self.peek_kind() {
-            TokenKind::IntLiteral | TokenKind::FloatLiteral | TokenKind::StringLiteral => {
-                self.parse_literal_expression()
-            }
+            TokenKind::IntLiteral
+            | TokenKind::FloatLiteral
+            | TokenKind::StringLiteral
+            | TokenKind::BoolLiteral => self.parse_literal_expression(),
             TokenKind::Identifier => {
                 let name = {
                     let token = self.consume().expect("Expected identifier");
@@ -137,14 +138,14 @@ impl Parser<'_> {
 
                 Ok(self.create_expr(cursor_start, ExprKind::FnCall { name, args }))
             }
+            TokenKind::Plus | TokenKind::Minus | TokenKind::ExclamationMark => {
+                self.parse_prefix_operator_expression()
+            }
             TokenKind::ParenOpen => {
                 self.consume_specific(TokenKind::ParenOpen)?;
                 let expr = self.parse_pratt_expression(0);
                 self.consume_specific(TokenKind::ParenClose)?;
                 expr
-            }
-            TokenKind::Plus | TokenKind::Minus | TokenKind::ExclamationMark => {
-                self.parse_prefix_operator_expression()
             }
             invalid_kind => {
                 Err(self.error(format!("Invalid start of expression: `{}`", invalid_kind)))
@@ -169,6 +170,10 @@ impl Parser<'_> {
                     .expect(&format!("Invalid float literal: `{}`", text)),
             ),
             TokenKind::StringLiteral => Literal::String(text.to_string()),
+            TokenKind::BoolLiteral => Literal::Bool(
+                text.parse()
+                    .expect(&format!("Invalid bool literal: `{}`", text)),
+            ),
             _ => unreachable!(),
         };
         Ok(self.create_expr(cursor_start, ExprKind::Literal(literal)))

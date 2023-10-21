@@ -42,6 +42,7 @@ pub enum TokenKind {
     IntLiteral,
     FloatLiteral,
     StringLiteral,
+    BoolLiteral,
 }
 
 impl std::fmt::Display for TokenKind {
@@ -87,6 +88,7 @@ impl std::fmt::Display for TokenKind {
             Self::IntLiteral => "integer literal".to_string(),
             Self::FloatLiteral => "float literal".to_string(),
             Self::StringLiteral => "string literal".to_string(),
+            Self::BoolLiteral => "bool literal".to_string(),
         };
 
         write!(f, "{}", str)

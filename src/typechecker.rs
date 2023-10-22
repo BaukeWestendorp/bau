@@ -91,8 +91,6 @@ impl Typechecker {
             Stmt::Let { .. } => self.check_let_statement(statement),
             Stmt::Assignment { .. } => self.check_assignment_statement(statement),
             Stmt::If { .. } => self.check_if_statement(statement),
-            Stmt::Loop { .. } => todo!("Typechecking Loop statement not implemented"),
-            Stmt::Block { .. } => todo!("Typechecking Block statement not implemented"),
             Stmt::Return { .. } => {
                 let function_return_type = match function {
                     Item::Function { return_type, .. } => return_type,
@@ -100,9 +98,8 @@ impl Typechecker {
                 self.check_return_statement(statement, function_return_type)?;
                 Ok(())
             }
-            Stmt::Continue => todo!("Typechecking Continue statement not implemented"),
-            Stmt::Break => todo!("Typechecking Break statement not implemented"),
             Stmt::Expression { .. } => self.check_expression_statement(statement),
+            _ => Ok(()),
         }
     }
 

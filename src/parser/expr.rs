@@ -28,7 +28,7 @@ impl Operator for TokenKind {
             | TokenKind::GreaterThan
             | TokenKind::GreaterThanEquals => Some((7, 8)),
             TokenKind::Plus | TokenKind::Minus => Some((9, 10)),
-            TokenKind::Asterisk | TokenKind::Slash => Some((11, 12)),
+            TokenKind::Asterisk | TokenKind::Slash | TokenKind::Percent => Some((11, 12)),
             _ => None,
         }
     }
@@ -64,6 +64,7 @@ impl Parser<'_> {
                 | TokenKind::Minus
                 | TokenKind::Asterisk
                 | TokenKind::Slash
+                | TokenKind::Percent
                 | TokenKind::EqualsEquals
                 | TokenKind::ExclamationMarkEquals
                 | TokenKind::LessThan

@@ -242,7 +242,7 @@ impl Typechecker {
                         rhs_type
                     );
                 }
-                Ok(Type::bool())
+                Ok(lhs_type)
             }
             _ => panic!("Expected InfixOp expression"),
         }

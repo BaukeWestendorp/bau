@@ -92,6 +92,7 @@ pub(crate) fn get_rules() -> Vec<Rule> {
         char!(TokenKind::Equals),
         char!(TokenKind::LessThan),
         char!(TokenKind::GreaterThan),
+        char!(TokenKind::Percent),
         two_chars!(TokenKind::EqualsEquals),
         two_chars!(TokenKind::ExclamationMarkEquals),
         two_chars!(TokenKind::AmpersandAmpersand),

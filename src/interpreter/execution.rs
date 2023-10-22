@@ -282,6 +282,10 @@ impl Interpreter {
                         (Value::Float(lhs), Value::Float(rhs)) => Ok(Value::Float(lhs / rhs)),
                         _ => execution_error!("Division is only available between ints and floats"),
                     },
+                    TokenKind::Percent => match (lhs, rhs) {
+                        (Value::Int(lhs), Value::Int(rhs)) => Ok(Value::Int(lhs % rhs)),
+                        _ => execution_error!("Modulo is only available between ints"),
+                    },
                     TokenKind::EqualsEquals => Ok(Value::Bool(lhs == rhs)),
                     TokenKind::ExclamationMarkEquals => Ok(Value::Bool(lhs != rhs)),
                     TokenKind::LessThan => match (lhs, rhs) {

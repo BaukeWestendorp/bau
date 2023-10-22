@@ -17,14 +17,25 @@ pub struct Parser<'source> {
 
 impl<'source> Parser<'source> {
     pub fn new(source: &'source Source) -> Self {
+        let mut tokenizer = Tokenizer::new(source.text());
+        let mut tokens = vec![];
+        while let Some(token) = tokenizer.next() {
+            match &token.kind {
+                TokenKind::Whitespace => continue,
+                TokenKind::Comment => loop {
+                    if tokenizer
+                        .next()
+                        .is_some_and(|token| token.text(source.text()).contains('\n'))
+                    {
+                        break;
+                    }
+                },
+                _ => tokens.push(token),
+            }
+        }
         Self {
             source,
-            tokens: Tokenizer::new(source.text())
-                .tokenize()
-                .iter()
-                .filter(|t| t.kind != TokenKind::Whitespace)
-                .cloned()
-                .collect(),
+            tokens,
             cursor: 0,
         }
     }

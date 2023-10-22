@@ -54,17 +54,20 @@ pub(crate) fn get_rules() -> Vec<Rule> {
     }
 
     macro_rules! two_chars {
-        ($token:expr) => {
+        ($token:expr, $repr:expr) => {
             Rule {
                 kind: $token,
                 matches: |input| {
                     match_two_chars(
                         input,
-                        $token.to_string().chars().nth(0).unwrap(),
-                        $token.to_string().chars().nth(1).unwrap(),
+                        $repr.chars().nth(0).unwrap(),
+                        $repr.chars().nth(1).unwrap(),
                     )
                 },
             }
+        };
+        ($token:expr) => {
+            two_chars!($token, $token.to_string())
         };
     }
 
@@ -93,6 +96,7 @@ pub(crate) fn get_rules() -> Vec<Rule> {
         char!(TokenKind::LessThan),
         char!(TokenKind::GreaterThan),
         char!(TokenKind::Percent),
+        two_chars!(TokenKind::Comment, "//"),
         two_chars!(TokenKind::EqualsEquals),
         two_chars!(TokenKind::ExclamationMarkEquals),
         two_chars!(TokenKind::AmpersandAmpersand),

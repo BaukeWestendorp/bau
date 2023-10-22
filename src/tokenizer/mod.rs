@@ -78,7 +78,6 @@ impl<'input> Tokenizer<'input> {
             ',' => Some(TokenKind::Comma),
             '+' => Some(TokenKind::Plus),
             '*' => Some(TokenKind::Asterisk),
-            '/' => Some(TokenKind::Slash),
             _ => None,
         }
     }

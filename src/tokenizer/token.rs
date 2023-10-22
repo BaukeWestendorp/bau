@@ -5,6 +5,7 @@ pub enum TokenKind {
     Error,
     EndOfFile,
     Whitespace,
+    Comment,
 
     Fn,
     Let,
@@ -53,6 +54,7 @@ impl std::fmt::Display for TokenKind {
             Self::Error => "error".to_string(),
             Self::EndOfFile => "end of file".to_string(),
             Self::Whitespace => "whitespace".to_string(),
+            Self::Comment => "comment".to_string(),
 
             Self::Fn => "fn".to_string(),
             Self::Let => "let".to_string(),

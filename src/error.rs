@@ -11,17 +11,22 @@ pub enum BauError {
 
 impl BauError {
     pub fn log(&self, source: &Source) {
+        let max_line_number_len = source.line_count().to_string().len();
         match self {
             BauError::ParserError { span, message }
             | BauError::TypecheckerError { span, message } => {
                 let print_line_gutter = |line_number: Option<usize>| {
                     match line_number {
                         Some(line_number) => {
-                            eprint!("{: <1$}", "", line_number.to_string().len());
+                            eprint!(
+                                "{: <1$}",
+                                "",
+                                max_line_number_len - line_number.to_string().len()
+                            );
                             eprint!("{}", line_number);
                         }
                         None => {
-                            eprint!("{: <1$} ", "", " ".len());
+                            eprint!("{: <1$}", "", max_line_number_len);
                         }
                     }
                     eprint!(" {} ", "|".bright_red());

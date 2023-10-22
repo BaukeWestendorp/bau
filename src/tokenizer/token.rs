@@ -37,6 +37,7 @@ pub enum TokenKind {
     GreaterThanEquals,
     AmpersandAmpersand,
     PipePipe,
+    Arrow,
 
     Identifier,
     IntLiteral,
@@ -83,6 +84,7 @@ impl std::fmt::Display for TokenKind {
             Self::GreaterThanEquals => ">=".to_string(),
             Self::AmpersandAmpersand => "&&".to_string(),
             Self::PipePipe => "||".to_string(),
+            Self::Arrow => "->".to_string(),
 
             Self::Identifier => "identifier".to_string(),
             Self::IntLiteral => "integer literal".to_string(),

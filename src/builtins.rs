@@ -1,8 +1,8 @@
 use crate::error::BauResult;
 use crate::interpreter::value::Value;
 use crate::interpreter::Interpreter;
-use crate::parser::ast::Item;
 use crate::parser::ast::{BlockKind, Expr, Stmt};
+use crate::parser::ast::{Item, Type};
 use lazy_static::lazy_static;
 
 lazy_static! {
@@ -14,6 +14,7 @@ lazy_static! {
                 statements: vec![],
                 block_kind: BlockKind::Function
             },
+            return_type: Type::void(),
         },
         action: builtin_print,
     },];

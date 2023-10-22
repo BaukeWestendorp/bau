@@ -87,6 +87,7 @@ pub(crate) fn get_rules() -> Vec<Rule> {
     }
 
     vec![
+        char!(TokenKind::Minus),
         char!(TokenKind::ExclamationMark),
         char!(TokenKind::Equals),
         char!(TokenKind::LessThan),
@@ -97,6 +98,7 @@ pub(crate) fn get_rules() -> Vec<Rule> {
         two_chars!(TokenKind::PipePipe),
         two_chars!(TokenKind::LessThanEquals),
         two_chars!(TokenKind::GreaterThanEquals),
+        two_chars!(TokenKind::Arrow),
         keyword!(TokenKind::Let),
         keyword!(TokenKind::Fn),
         keyword!(TokenKind::If),

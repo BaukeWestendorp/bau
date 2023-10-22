@@ -26,8 +26,7 @@ impl Parser<'_> {
 
     pub fn parse_let_statement(&mut self) -> BauResult<Stmt> {
         self.consume_specific(TokenKind::Let)?;
-        let type_ident = self.consume_specific(TokenKind::Identifier)?;
-        let var_type = self.text(type_ident).to_string();
+        let var_type = self.parse_type()?;
         let name_ident = self.consume_specific(TokenKind::Identifier)?;
         let name = self.text(name_ident).to_string();
         self.consume_specific(TokenKind::Equals)?;
@@ -35,7 +34,7 @@ impl Parser<'_> {
         self.consume_specific(TokenKind::Semicolon)?;
         Ok(Stmt::Let {
             name,
-            var_type: Type { name: var_type },
+            var_type,
             expr: Box::new(value),
         })
     }
@@ -125,6 +124,14 @@ impl Parser<'_> {
         self.consume_specific(TokenKind::Semicolon)?;
         Ok(Stmt::Expression {
             expr: Box::new(expr),
+        })
+    }
+
+    pub fn parse_type(&mut self) -> BauResult<Type> {
+        let ident = self.consume_specific(TokenKind::Identifier)?;
+        let type_name = self.text(ident);
+        Ok(Type {
+            name: type_name.to_string(),
         })
     }
 }

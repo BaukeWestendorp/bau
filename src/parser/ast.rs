@@ -89,6 +89,7 @@ pub enum Item {
         name: String,
         parameters: Vec<String>,
         body: Stmt,
+        return_type: Type,
     },
 }
 
@@ -97,9 +98,9 @@ pub struct Type {
     pub name: String,
 }
 impl Type {
-    pub fn unit() -> Type {
+    pub fn void() -> Type {
         Type {
-            name: "()".to_string(),
+            name: "void".to_string(),
         }
     }
     pub fn int() -> Type {

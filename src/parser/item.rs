@@ -33,6 +33,10 @@ impl Parser<'_> {
             parameters.push(name);
         }
         self.consume_specific(TokenKind::ParenClose)?;
+
+        self.consume_specific(TokenKind::Arrow)?;
+        let return_type = self.parse_type()?;
+
         if !self.at(TokenKind::BraceOpen) {
             return Err(self.error("Expected `{` after function declaration".to_string()));
         }
@@ -42,6 +46,7 @@ impl Parser<'_> {
             name,
             parameters,
             body,
+            return_type,
         })
     }
 }

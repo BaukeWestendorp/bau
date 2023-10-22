@@ -42,7 +42,7 @@ impl<'input> Tokenizer<'input> {
                 .0
                 + 1;
             (len, TokenKind::Whitespace)
-        } else if let Some(punc) = self.consume_punctuation(next) {
+        } else if let Some(punc) = self.consume_unambiguous_token(next) {
             (1, punc)
         } else {
             self.rules
@@ -66,7 +66,7 @@ impl<'input> Tokenizer<'input> {
         })
     }
 
-    fn consume_punctuation(&self, char: char) -> Option<TokenKind> {
+    fn consume_unambiguous_token(&self, char: char) -> Option<TokenKind> {
         match char {
             '(' => Some(TokenKind::ParenOpen),
             ')' => Some(TokenKind::ParenClose),
@@ -77,7 +77,6 @@ impl<'input> Tokenizer<'input> {
             ';' => Some(TokenKind::Semicolon),
             ',' => Some(TokenKind::Comma),
             '+' => Some(TokenKind::Plus),
-            '-' => Some(TokenKind::Minus),
             '*' => Some(TokenKind::Asterisk),
             '/' => Some(TokenKind::Slash),
             _ => None,

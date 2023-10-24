@@ -26,12 +26,14 @@ impl LanguageServer for Backend {
                                 }
                             },
                             semantic_tokens_options: SemanticTokensOptions {
-                                work_done_progress_options: WorkDoneProgressOptions::default(),
+                                work_done_progress_options: WorkDoneProgressOptions {
+                                    work_done_progress: Some(false),
+                                },
                                 legend: SemanticTokensLegend {
                                     token_types: vec![SemanticTokenType::KEYWORD],
                                     token_modifiers: vec![],
                                 },
-                                range: Some(true),
+                                range: Some(false),
                                 full: Some(SemanticTokensFullOptions::Bool(true)),
                             },
                             static_registration_options: StaticRegistrationOptions::default(),
@@ -46,16 +48,6 @@ impl LanguageServer for Backend {
 
     async fn shutdown(&self) -> Result<()> {
         Ok(())
-    }
-
-    async fn semantic_tokens_range(
-        &self,
-        _: SemanticTokensRangeParams,
-    ) -> Result<Option<SemanticTokensRangeResult>> {
-        self.client
-            .log_message(MessageType::INFO, "semantic_tokens_range")
-            .await;
-        Ok(None)
     }
 
     async fn semantic_tokens_full(

@@ -1,7 +1,7 @@
 {
   "name": "bau",
   "displayName": "Bau",
-  "description": "",
+  "description": "Language support for Bau",
   "version": "0.0.1",
   "engines": {
     "vscode": "^1.83.0"
@@ -21,13 +21,6 @@
           ".bau"
         ],
         "configuration": "./language-configuration.json"
-      }
-    ],
-    "grammars": [
-      {
-        "language": "bau",
-        "scopeName": "main.bau",
-        "path": "./syntaxes/bau.tmLanguage.json"
       }
     ]
   },

@@ -1,5 +1,5 @@
-use bau::interpreter::value::Value;
-use bau::Bau;
+use bau_core::interpreter::value::Value;
+use bau_core::Bau;
 
 #[test]
 fn should_return_value_from_extension_method() {

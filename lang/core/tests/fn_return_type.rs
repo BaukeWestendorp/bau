@@ -1,4 +1,4 @@
-use bau::Bau;
+use bau_core::Bau;
 
 #[test]
 fn function_with_matched_types_should_not_error() {

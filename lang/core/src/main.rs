@@ -1,5 +1,5 @@
-use bau::parser::source::Source;
-use bau::Bau;
+use bau_core::parser::source::Source;
+use bau_core::Bau;
 use clap::Parser;
 
 #[derive(clap::Parser, Debug)]

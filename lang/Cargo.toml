@@ -1,0 +1,12 @@
+[workspace]
+members = [
+    "core",
+    "language-server"
+]
+resolver = "2"
+
+
+[workspace.package]
+version = "0.0.0"
+authors = ["Bauke Westendorp"]
+edition = "2021"

@@ -1,5 +1,5 @@
-use bau::Bau;
-use bau::interpreter::value::Value;
+use bau_core::interpreter::value::Value;
+use bau_core::Bau;
 
 #[test]
 fn matched_types_should_not_error() {

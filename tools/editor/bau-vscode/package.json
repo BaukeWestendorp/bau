@@ -1,0 +1,40 @@
+{
+  "name": "bau",
+  "displayName": "Bau",
+  "description": "",
+  "version": "0.0.1",
+  "engines": {
+    "vscode": "^1.83.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "bau",
+        "aliases": [
+          "Bau",
+          "bau"
+        ],
+        "extensions": [
+          ".bau"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "bau",
+        "scopeName": "main.bau",
+        "path": "./syntaxes/bau.tmLanguage.json"
+      }
+    ]
+  },
+  "dependencies": {
+    "vscode-languageclient": "^9.0.1"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.83.1"
+  }
+}

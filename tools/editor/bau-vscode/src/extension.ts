@@ -3,9 +3,12 @@ import { LanguageClientOptions } from 'vscode-languageclient';
 import { LanguageClient } from 'vscode-languageclient/node';
 
 export function activate(context: vscode.ExtensionContext) {
+    let executableLocation = vscode.workspace.getConfiguration('bau').get<string>('languageServerExecutablePath');
+    if (!executableLocation) executableLocation = 'bau-language-server';
+
     const serverOptions = {
-        command: 'bau',
-        args: ['language-server'],
+        command: executableLocation,
+        args: [],
     };
 
     const clientOptions: LanguageClientOptions = {

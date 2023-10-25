@@ -132,6 +132,7 @@ dependencies = [
 name = "bau-language-server"
 version = "0.0.0"
 dependencies = [
+ "bau-core",
  "serde_json",
  "tokio",
  "tower-lsp",

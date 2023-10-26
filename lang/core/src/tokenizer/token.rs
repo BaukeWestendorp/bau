@@ -26,6 +26,8 @@ pub enum TokenKind {
     Semicolon,
     Period,
     Comma,
+    Arrow,
+
     Equals,
     Plus,
     Minus,
@@ -41,7 +43,6 @@ pub enum TokenKind {
     GreaterThanEquals,
     AmpersandAmpersand,
     PipePipe,
-    Arrow,
 
     Identifier,
     IntLiteral,

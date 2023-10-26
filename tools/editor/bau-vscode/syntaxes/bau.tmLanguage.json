@@ -1,0 +1,107 @@
+{
+	"$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+	"name": "Bau",
+	"patterns": [
+		{ "include": "#comment" },
+		{ "include": "#function-declaration" },
+		{ "include": "#let-statement" },
+		{ "include": "#number" },
+		{ "include": "#string" },
+		{ "include": "#constant" },
+		{ "include": "#keyword" }
+	],
+	"repository": {
+		"comment": {
+			"patterns": [
+				{
+					"name": "comment.line.bau",
+					"match": "//.*$"
+				}
+			]
+		},
+		"number": {
+			"patterns": [
+				{
+					"name": "constant.numeric.bau",
+					"match": "\\b(\\d+(\\.\\d+)?)\\b"
+				}
+			]
+		},
+		"string": {
+			"name": "string.quoted.double.bau",
+			"begin": "\"",
+			"end": "\"",
+			"patterns": [
+				{
+					"name": "constant.character.escape.bau",
+					"match": "\\\\."
+				}
+			]
+		},
+		"constant": {
+			"patterns": [
+				{
+					"name": "constant.language.bau",
+					"match": "\\b(true|false)\\b"
+				}
+			]
+		},
+		"type": {
+			"patterns": [
+				{
+					"name": "storage.type.bau",
+					"match": "\\b(void|int|float|string|bool)\\b"
+				}
+			]
+		},
+		"operator": {
+			"patterns": [
+				{
+					"name": "keyword.operator.bau",
+					"match": "\\b(\\+|-|\\*|/|%|!|==|!=|<|<=|>|>=|&&|\\|\\|)\\b"
+				}
+			]
+		},
+		"keyword": {
+			"patterns": [
+				{
+					"name": "keyword.control.bau",
+					"match": "\\b(if|else|loop|return|continue|break)\\b"
+				}
+			]
+		},
+		"function-declaration": {
+			"comment": "Function definition",
+			"begin": "(fn)\\s+([a-zA-Z_][a-zA-Z0-9_]*)(\\(\\))(\\s*->\\s*)([a-zA-Z_][a-zA-Z0-9_]*)",
+			"end": "\\{",
+			"beginCaptures": {
+			  "1": {
+				"name": "keyword.other.fn.bau"
+			  },
+			  "2": {
+				"name": "entity.name.function.bau"
+			  },
+			  "5": {
+				"name": "entity.name.type.bau"
+			  }
+			}
+		},
+		"let-statement": {
+			"comment": "Let statement",
+			"begin": "(let)\\s+([a-zA-Z_][a-zA-Z0-9_]*)\\s+([a-zA-Z_][a-zA-Z0-9_]*)",
+			"end": "=",
+			"beginCaptures": {
+				"1": {
+					"name": "keyword.other.let.bau"
+				},
+				"2": {
+					"name": "entity.name.type.bau"
+				},
+				"3": {
+					"name": "variable.name.bau"
+				}
+			}
+		}
+	},
+	"scopeName": "source.bau"
+}

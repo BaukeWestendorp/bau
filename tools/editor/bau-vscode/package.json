@@ -18,6 +18,11 @@
           "type": "string",
           "default": "bau-language-server",
           "description": "Path to the Bau language server executable (bau-language-server)"
+        },
+        "bau.executablePath": {
+          "type": "string",
+          "default": "bau-core",
+          "description": "Path to the Bau executable (bau-core)"
         }
       }
     },
@@ -32,6 +37,13 @@
           ".bau"
         ],
         "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "bau",
+        "scopeName": "source.bau",
+        "path": "./syntaxes/bau.tmLanguage.json"
       }
     ]
   },

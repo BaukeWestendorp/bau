@@ -11,7 +11,7 @@ pub enum ParsedItem {
 #[derive(Debug, Clone, PartialEq)]
 pub struct ParsedFunctionItem {
     pub name: String,
-    pub parameters: Vec<String>,
+    pub parameters: Vec<(ParsedType, String)>,
     pub body: ParsedStmt,
     pub return_type: ParsedType,
 }
@@ -48,9 +48,10 @@ impl Parser<'_> {
         self.consume_specific(TokenKind::ParenOpen)?;
         let mut parameters = vec![];
         while !self.at(TokenKind::ParenClose) {
-            let param_ident = self.consume_specific(TokenKind::Identifier)?;
-            let name = self.text(param_ident).to_string();
-            parameters.push(name);
+            let param_type = self.parse_type()?;
+            let param_name = self.consume_specific(TokenKind::Identifier)?;
+            let param_name = self.text(param_name).to_string();
+            parameters.push((param_type, param_name));
         }
         self.consume_specific(TokenKind::ParenClose)?;
 

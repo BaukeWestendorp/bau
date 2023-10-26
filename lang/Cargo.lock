@@ -119,6 +119,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "bau"
+version = "0.0.0"
+
+[[package]]
 name = "bau-core"
 version = "0.0.0"
 dependencies = [

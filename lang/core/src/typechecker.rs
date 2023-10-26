@@ -23,6 +23,7 @@ pub enum CheckedStmt {
     Let {
         name: String,
         var_type: TypeId,
+        var_id: VariableId,
         expr: Box<CheckedExpr>,
     },
     Assignment {
@@ -94,7 +95,10 @@ pub enum CheckedExprKind {
         op: TokenKind,
         expr: Box<CheckedExpr>,
     },
-    MethodCall(CheckedFunctionItem),
+    MethodCall {
+        method: CheckedFunctionItem,
+        args: Vec<CheckedExpr>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -121,7 +125,7 @@ impl CheckedFunctionCall {
 pub struct CheckedFunctionItem {
     name: String,
     return_type: TypeId,
-    parameters: Vec<(String, TypeId)>,
+    parameters: Vec<CheckedFunctionParam>,
     body: CheckedStmt,
 }
 
@@ -129,7 +133,7 @@ impl CheckedFunctionItem {
     pub fn new(
         name: &str,
         return_type: TypeId,
-        parameters: Vec<(String, TypeId)>,
+        parameters: Vec<CheckedFunctionParam>,
         body: CheckedStmt,
     ) -> Self {
         Self {
@@ -148,7 +152,7 @@ impl CheckedFunctionItem {
         self.return_type
     }
 
-    pub fn parameters(&self) -> &Vec<(String, TypeId)> {
+    pub fn parameters(&self) -> &Vec<CheckedFunctionParam> {
         &self.parameters
     }
 
@@ -161,6 +165,14 @@ impl CheckedFunctionItem {
     }
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct CheckedFunctionParam {
+    pub type_id: TypeId,
+    pub var_id: VariableId,
+    pub name: String,
+}
+
+pub type VariableId = usize;
 pub type TypeId = usize;
 pub type FunctionId = usize;
 
@@ -171,7 +183,7 @@ pub const STRING_TYPE_ID: TypeId = 3;
 pub const BOOL_TYPE_ID: TypeId = 4;
 
 pub struct Typechecker {
-    variable_types: HashMap<String, TypeId>,
+    variable_types: Vec<TypeId>,
     functions: Vec<CheckedFunctionItem>,
     types: Vec<Type>,
 }
@@ -179,7 +191,7 @@ pub struct Typechecker {
 impl Typechecker {
     pub fn new() -> Self {
         Self {
-            variable_types: HashMap::new(),
+            variable_types: vec![],
             functions: vec![],
             types: vec![
                 Type::new("void", vec![]),
@@ -206,16 +218,17 @@ impl Typechecker {
     }
 
     /// Get the type of the variable with the given name.
-    fn get_variable_type(&self, name: &str) -> TypeId {
+    fn get_variable_type(&self, var_id: VariableId) -> TypeId {
         *self
             .variable_types
-            .get(name)
-            .expect(format!("Type not found for variable with name `{}`", name).as_str())
+            .get(var_id)
+            .expect(format!("Type not found for variable with name `{}`", var_id).as_str())
     }
 
     /// Set the type of the variable with the given name.
-    fn set_variable_type(&mut self, name: String, type_id: TypeId) {
-        self.variable_types.insert(name, type_id);
+    fn set_variable_type(&mut self, type_id: TypeId) -> VariableId {
+        self.variable_types.push(type_id);
+        self.variable_types.len() - 1
     }
 
     /// Get the function with the given name.
@@ -311,29 +324,48 @@ impl Typechecker {
     }
 
     pub fn check_function_item(&mut self, function: &ParsedFunctionItem) -> BauResult<()> {
-        let return_type = self.check_type(&function.return_type);
-        let body = self.check_function_body(&function.body, return_type)?;
-        self.set_function(CheckedFunctionItem::new(
-            &function.name,
-            return_type,
-            vec![],
-            body,
-        ));
+        let function = self.get_checked_function(function)?;
+        self.set_function(function);
         Ok(())
     }
 
     pub fn check_extend_item(&mut self, extends_item: &ParsedExtendsItem) -> BauResult<()> {
         let type_id = self.check_type(&extends_item.parsed_type);
+
         for function in &extends_item.methods {
-            let return_type = self.check_type(&function.return_type);
-            let body = self.check_function_body(&function.body, return_type)?;
-            self.extend_type_with_method(
-                type_id,
-                CheckedFunctionItem::new(&function.name, return_type, vec![], body),
-            )?;
+            let checked_function = self.get_checked_function(function)?;
+            self.extend_type_with_method(type_id, checked_function)?;
         }
 
         Ok(())
+    }
+
+    fn get_checked_function(
+        &mut self,
+        function: &ParsedFunctionItem,
+    ) -> BauResult<CheckedFunctionItem> {
+        let return_type = self.check_type(&function.return_type);
+        let body = self.check_function_body(&function.body, return_type)?;
+
+        let params: Vec<CheckedFunctionParam> = function
+            .parameters
+            .iter()
+            .map(|param| {
+                let type_id = self.check_type(&param.0);
+                CheckedFunctionParam {
+                    type_id,
+                    var_id: self.set_variable_type(type_id),
+                    name: param.1.clone(),
+                }
+            })
+            .collect();
+
+        Ok(CheckedFunctionItem::new(
+            &function.name,
+            return_type,
+            params,
+            body,
+        ))
     }
 
     pub fn check_function_body(
@@ -387,9 +419,10 @@ impl Typechecker {
                         self.get_type(expr.type_id)
                     );
                 }
-                self.set_variable_type(name.clone(), var_type_id);
+                let var_id = self.set_variable_type(var_type_id);
                 Ok(CheckedStmt::Let {
                     name: name.clone(),
+                    var_id,
                     var_type: var_type_id,
                     expr: Box::new(expr),
                 })
@@ -402,7 +435,7 @@ impl Typechecker {
         match statement {
             ParsedStmt::Assignment { expr, name } => {
                 let expr = self.check_expression(expr)?;
-                let var_type = self.get_variable_type(name);
+                let var_type = self.get_var(name);
                 if var_type != expr.type_id {
                     return typechecker_error!(
                         expr.span,
@@ -531,11 +564,22 @@ impl Typechecker {
             }
             ParsedExprKind::MethodCall { expr, call } => {
                 let checked_expr = self.check_expression(expr)?;
-                let method = self.get_method_mut(checked_expr.type_id, &call.name)?;
+
+                let method = self
+                    .get_method_mut(checked_expr.type_id, &call.name)?
+                    .clone();
+
+                let return_type = method.return_type();
+
+                let mut args = vec![];
+                for arg in &call.args {
+                    args.push(self.check_expression(&arg)?);
+                }
+
                 CheckedExpr {
-                    kind: CheckedExprKind::MethodCall(method.clone()),
+                    kind: CheckedExprKind::MethodCall { method, args },
                     span: expression.span,
-                    type_id: method.return_type,
+                    type_id: return_type,
                 }
             }
         };

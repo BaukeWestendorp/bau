@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "core",
+    "bau",
     "language-server"
 ]
 resolver = "2"

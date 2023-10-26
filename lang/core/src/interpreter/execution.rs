@@ -26,8 +26,21 @@ impl Interpreter {
     pub fn execute_function(
         &mut self,
         function: &CheckedFunctionItem,
-        _args: &Vec<CheckedExpr>,
+        args: &Vec<CheckedExpr>,
     ) -> BauResult<Option<Value>> {
+        let params = function.parameters();
+        if params.len() != args.len() {
+            return execution_error!("Expected {} arguments, found {}", params.len(), args.len());
+        }
+        for (i, param) in params.iter().enumerate() {
+            if let Some(value) = self.execute_expression(&args[i])? {
+                self.current_scope_mut()
+                    .set_variable_value(&param.name, value);
+            } else {
+                return execution_error!("Argument can't be `void`");
+            }
+        }
+
         let return_value =
             self.execute_block_statement(&function.body())?
                 .map_or(None, |control_flow| match control_flow {
@@ -55,7 +68,8 @@ impl Interpreter {
         match statement {
             CheckedStmt::Let { name, expr, .. } => match self.execute_expression(expr)? {
                 Some(initial_value) => {
-                    self.set_variable_value(name, initial_value);
+                    self.current_scope_mut()
+                        .set_variable_value(name, initial_value);
                     Ok(())
                 }
                 None => execution_error!("Variable can't be initialized to `void`"),
@@ -68,7 +82,7 @@ impl Interpreter {
         match statement {
             CheckedStmt::Assignment { name, expr, .. } => {
                 if let Some(value) = self.execute_expression(expr)? {
-                    self.set_variable_value(name, value);
+                    self.current_scope_mut().set_variable_value(name, value);
                     return Ok(());
                 }
                 execution_error!("Variable can't be assigned to `void`")
@@ -110,10 +124,7 @@ impl Interpreter {
                 statements,
                 block_kind,
             } => {
-                self.scope_stack.push(Scope {
-                    control_flow: None,
-                    block_kind: *block_kind,
-                });
+                self.scope_stack.push(Scope::new(*block_kind));
                 for statement in statements {
                     self.execute_statement(statement)?;
                     if self.control_flow_should_break() {
@@ -192,7 +203,7 @@ impl Interpreter {
                 execution_error!("PostfixOp expression execution not implemented")
             }
             CheckedExprKind::BuiltinFnCall { function, args } => function.call(self, args),
-            CheckedExprKind::MethodCall(method) => self.execute_function(&method, &vec![]),
+            CheckedExprKind::MethodCall { method, args } => self.execute_function(&method, &args),
         }
     }
 
@@ -206,7 +217,9 @@ impl Interpreter {
     }
 
     pub fn execute_identifier_expression(&mut self, ident: &str) -> BauResult<Option<Value>> {
-        self.get_variable_value(ident).map(|v| v.cloned())
+        self.current_scope()
+            .get_variable_value(ident)
+            .map(|v| v.cloned())
     }
 
     pub fn execute_function_call_expression(

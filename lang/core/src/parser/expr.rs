@@ -174,15 +174,22 @@ impl Parser<'_> {
             self.text(token).to_string()
         };
 
+        let mut args = vec![];
         self.consume_specific(TokenKind::ParenOpen)?;
-        // FIXME: Parse arguments
+        while !self.at(TokenKind::ParenClose) {
+            let arg = self.parse_pratt_expression(0)?;
+            args.push(arg);
+            if self.at(TokenKind::Comma) {
+                self.consume_specific(TokenKind::Comma)?;
+            }
+        }
         self.consume_specific(TokenKind::ParenClose)?;
 
         Ok(self.create_expr(
             cursor_start,
             ParsedExprKind::MethodCall {
                 expr: Box::new(expr),
-                call: ParsedFunctionCall { name, args: vec![] },
+                call: ParsedFunctionCall { name, args },
             },
         ))
     }

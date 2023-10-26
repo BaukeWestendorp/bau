@@ -1,3 +1,12 @@
+use bau::Bau;
+use clap::Parser;
+
+#[derive(Parser)]
+struct Args {
+    file: String,
+}
+
 fn main() {
-    println!("Hello, world!");
+    let args = Args::parse();
+    Bau::new().run_file(&args.file)
 }

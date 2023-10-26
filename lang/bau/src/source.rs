@@ -9,4 +9,12 @@ impl<'text> Source<'text> {
         let lines = text.lines().collect();
         Self { text, lines }
     }
+
+    pub fn text(&self) -> &'text str {
+        self.text
+    }
+
+    pub fn lines(&self) -> &[&'text str] {
+        &self.lines
+    }
 }

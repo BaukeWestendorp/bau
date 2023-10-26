@@ -123,6 +123,8 @@ name = "bau"
 version = "0.0.0"
 dependencies = [
  "clap",
+ "lazy_static",
+ "regex",
 ]
 
 [[package]]

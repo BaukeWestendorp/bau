@@ -30,7 +30,26 @@ pub struct Parser<'source> {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum ParsedStatement {}
+pub enum ParsedStatement {
+    Let {
+        name: String,
+        type_name: String,
+        initial_value: Option<ParsedExpression>,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum ParsedExpression {
+    Literal(ParsedLiteralExpression),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum ParsedLiteralExpression {
+    Integer(i64),
+    Float(f64),
+    String(String),
+    Boolean(bool),
+}
 
 impl<'source> Parser<'source> {
     pub fn new(source: &'source Source) -> Self {
@@ -135,7 +154,74 @@ impl<'source> Parser<'source> {
     }
 
     fn parse_statement(&mut self) -> BauResult<Option<ParsedStatement>> {
-        Ok(None)
+        match self.peek_kind()? {
+            TokenKind::Let => self.parse_let_statement(),
+            _ => Ok(None),
+        }
+    }
+
+    fn parse_let_statement(&mut self) -> BauResult<Option<ParsedStatement>> {
+        self.consume_specific(TokenKind::Let)?;
+
+        let type_ident = self.consume_specific(TokenKind::Identifier)?;
+        let type_name = self.text(&type_ident);
+
+        let name_ident = self.consume_specific(TokenKind::Identifier)?;
+        let name = self.text(&name_ident);
+
+        self.consume_specific(TokenKind::Equals)?;
+
+        let initial_value = self.parse_expression()?;
+
+        self.consume_specific(TokenKind::Semicolon)?;
+
+        Ok(Some(ParsedStatement::Let {
+            name,
+            type_name,
+            initial_value,
+        }))
+    }
+
+    fn parse_expression(&mut self) -> BauResult<Option<ParsedExpression>> {
+        match self.peek_kind()? {
+            TokenKind::IntLiteral
+            | TokenKind::FloatLiteral
+            | TokenKind::StringLiteral
+            | TokenKind::BoolLiteral => self
+                .parse_literal_expression()
+                .map(|e| e.map(ParsedExpression::Literal)),
+            _ => Ok(None),
+        }
+    }
+
+    fn parse_literal_expression(&mut self) -> BauResult<Option<ParsedLiteralExpression>> {
+        match self.peek_kind()? {
+            TokenKind::IntLiteral => {
+                let string_value = self.consume_specific(TokenKind::IntLiteral)?;
+                let string_value_text = self.text(&string_value);
+                let value = string_value_text.parse::<i64>().unwrap();
+                Ok(Some(ParsedLiteralExpression::Integer(value)))
+            }
+            TokenKind::FloatLiteral => {
+                let string_value = self.consume_specific(TokenKind::FloatLiteral)?;
+                let string_value_text = self.text(&string_value);
+                let value = string_value_text.parse::<f64>().unwrap();
+                Ok(Some(ParsedLiteralExpression::Float(value)))
+            }
+            TokenKind::StringLiteral => {
+                let string_value = self.consume_specific(TokenKind::StringLiteral)?;
+                let string_value_text = self.text(&string_value);
+                let value = string_value_text[1..string_value_text.len() - 1].to_string();
+                Ok(Some(ParsedLiteralExpression::String(value)))
+            }
+            TokenKind::BoolLiteral => {
+                let string_value = self.consume_specific(TokenKind::BoolLiteral)?;
+                let string_value_text = self.text(&string_value);
+                let value = string_value_text.parse::<bool>().unwrap();
+                Ok(Some(ParsedLiteralExpression::Boolean(value)))
+            }
+            _ => Ok(None),
+        }
     }
 
     fn peek(&self) -> BauResult<&Token> {

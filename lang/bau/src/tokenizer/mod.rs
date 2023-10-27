@@ -84,15 +84,11 @@ impl<'input> Tokenizer<'input> {
     }
 
     fn token(&mut self, kind: TokenKind, len: usize) -> Token {
-        let token = Token {
+        let token = Token::new(
             kind,
-            span: Span {
-                start: self.cursor,
-                end: self.cursor + len,
-            },
-            coords: SourceCoords::new(self.line, self.column),
-        };
-        dbg!(&token);
+            Span::new(self.cursor, self.cursor + len),
+            SourceCoords::new(self.line, self.column),
+        );
         for char in self.input[self.cursor..self.cursor + len].chars() {
             self.column += 1;
             if char == '\n' {

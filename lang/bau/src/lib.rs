@@ -1,9 +1,9 @@
+use parser::Parser;
 use source::Source;
 
-use crate::tokenizer::Tokenizer;
-
-pub mod source;
-pub mod tokenizer;
+mod parser;
+mod source;
+mod tokenizer;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Bau {}
@@ -13,16 +13,11 @@ impl Bau {
         Self {}
     }
 
-    pub fn run(&self, source: &str) {
-        let source = Source::new(source);
-        let tokens = Tokenizer::new(source.text()).tokenize();
-
-        for token in tokens.iter() {
-            println!(
-                "{:?} {:?}",
-                token,
-                source.text()[token.span.start..token.span.end].to_string()
-            );
+    pub fn run(&self, input: &str) {
+        let source = Source::new(input);
+        let items = Parser::new(&source).parse();
+        for item in items.iter() {
+            println!("{:?}", item)
         }
     }
 

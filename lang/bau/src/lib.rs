@@ -1,9 +1,10 @@
 use parser::Parser;
 use source::Source;
 
-mod parser;
-mod source;
-mod tokenizer;
+pub mod error;
+pub mod parser;
+pub mod source;
+pub mod tokenizer;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Bau {}
@@ -15,7 +16,7 @@ impl Bau {
 
     pub fn run(&self, input: &str) {
         let source = Source::new(input);
-        let items = Parser::new(&source).parse();
+        let items = Parser::new(&source).parse_top_level();
         for item in items.iter() {
             println!("{:?}", item)
         }

@@ -1,11 +1,100 @@
+use crate::source::Source;
+use crate::tokenizer::token::TokenKind;
 use crate::tokenizer::Token;
 
-#[derive(Debug, Clone, PartialEq, thiserror::Error)]
+use colored::Colorize;
+
+#[derive(Debug, Clone, PartialEq)]
 pub enum BauError {
-    #[error("Unexpected end of file")]
-    UnexpectedEndOfFile(Token),
-    #[error("Unexpected token: {0:?}")]
-    UnexpectedToken(Token),
+    UnexpectedToken { token: Token, expected: TokenKind },
+    UnexpectedEndOfFile { token: Token },
+    ExpectedItem { token: Token },
+}
+
+impl std::fmt::Display for BauError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let str = match self {
+            Self::UnexpectedToken { token, expected } => {
+                format!(
+                    "Expected token `{}`, but found `{}` instead",
+                    expected, token.kind,
+                )
+            }
+            Self::UnexpectedEndOfFile { .. } => {
+                format!("Expected a token, but found end of file instead")
+            }
+            Self::ExpectedItem { token } => {
+                format!(
+                    "Expected an item (`fn` or `extend`), but found `{}` instead",
+                    token.kind
+                )
+            }
+        };
+
+        write!(f, "{}", str)
+    }
 }
 
 pub type BauResult<T> = Result<T, BauError>;
+
+pub fn print_error(source: &Source, error: &BauError) {
+    let max_line_number_len = source.lines().len().to_string().len();
+
+    match &error {
+        BauError::UnexpectedToken { token, .. }
+        | BauError::UnexpectedEndOfFile { token, .. }
+        | BauError::ExpectedItem { token } => {
+            eprintln!("{}: {}", "error".bright_red(), error.to_string());
+
+            print_source_line(
+                source,
+                max_line_number_len,
+                token.coords.line,
+                token.coords.column,
+                token.len(),
+            );
+
+            print_line_gutter(max_line_number_len, None);
+            eprintln!(
+                "{}",
+                format!(
+                    "{}{} {}",
+                    " ".repeat(token.coords.column),
+                    "^".repeat(token.len()),
+                    error.to_string()
+                )
+                .bright_red()
+            );
+        }
+    }
+}
+
+fn print_line_gutter(max_line_number_len: usize, line_number: Option<usize>) {
+    match line_number {
+        Some(line_number) => {
+            eprint!(
+                "{: <1$}",
+                "",
+                max_line_number_len - line_number.to_string().len()
+            );
+            eprint!("{}", line_number);
+        }
+        None => {
+            eprint!("{: <1$}", "", max_line_number_len);
+        }
+    }
+    eprint!(" {} ", "|".bright_red());
+}
+
+fn print_source_line(
+    source: &Source,
+    max_line_number_len: usize,
+    line_number: usize,
+    column: usize,
+    len: usize,
+) {
+    let (start, end) = source.lines()[line_number].split_at(column);
+    let (mid_error, end) = end.split_at(len);
+    print_line_gutter(max_line_number_len, Some(line_number + 1));
+    eprintln!("{}{}{}", start.white(), mid_error.bright_red(), end.white());
+}

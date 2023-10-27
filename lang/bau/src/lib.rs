@@ -16,10 +16,17 @@ impl Bau {
 
     pub fn run(&self, input: &str) {
         let source = Source::new(input);
-        let items = Parser::new(&source).parse_top_level();
-        for item in items.iter() {
-            println!("{:?}", item)
-        }
+        match Parser::new(&source).parse_top_level() {
+            Ok(items) => {
+                for item in items.iter() {
+                    println!("{:?}", item)
+                }
+            }
+            Err(error) => {
+                error::print_error(&source, &error);
+                std::process::exit(1);
+            }
+        };
     }
 
     pub fn run_file(&self, path: &str) {

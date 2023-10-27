@@ -55,12 +55,13 @@ pub fn print_error(source: &Source, error: &BauError) {
             );
 
             print_line_gutter(max_line_number_len, None);
+
             eprintln!(
                 "{}",
                 format!(
                     "{}{} {}",
                     " ".repeat(token.coords.column),
-                    "^".repeat(token.len()),
+                    "^".repeat(usize::max(1, token.len())),
                     error.to_string()
                 )
                 .bright_red()
@@ -72,15 +73,11 @@ pub fn print_error(source: &Source, error: &BauError) {
 fn print_line_gutter(max_line_number_len: usize, line_number: Option<usize>) {
     match line_number {
         Some(line_number) => {
-            eprint!(
-                "{: <1$}",
-                "",
-                max_line_number_len - line_number.to_string().len()
-            );
-            eprint!("{}", line_number);
+            let padding = max_line_number_len - line_number.to_string().len();
+            eprint!(" {}{}", " ".repeat(padding), line_number);
         }
         None => {
-            eprint!("{: <1$}", "", max_line_number_len);
+            eprint!(" {}", " ".repeat(max_line_number_len));
         }
     }
     eprint!(" {} ", "|".bright_red());
@@ -93,6 +90,10 @@ fn print_source_line(
     column: usize,
     len: usize,
 ) {
+    let line_number = match line_number >= source.lines().len() {
+        true => source.lines().len() - 1,
+        false => line_number,
+    };
     let (start, end) = source.lines()[line_number].split_at(column);
     let (mid_error, end) = end.split_at(len);
     print_line_gutter(max_line_number_len, Some(line_number + 1));

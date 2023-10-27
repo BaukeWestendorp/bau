@@ -184,7 +184,7 @@ impl<'source> Parser<'source> {
     }
 
     fn done(&self) -> bool {
-        self.cursor >= self.tokens.len()
+        self.peek_kind() == Ok(TokenKind::EndOfFile)
     }
 }
 

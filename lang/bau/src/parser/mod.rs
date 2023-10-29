@@ -48,15 +48,55 @@ pub struct Parser<'source> {
 #[derive(Debug, Clone, PartialEq)]
 pub enum ParsedStatement {
     Let {
-        name: String,
+        name: Identifier,
         type_name: TypeName,
-        initial_value: Option<ParsedExpression>,
+        initial_value: ParsedExpression,
     },
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum ParsedExpression {
+pub enum ParsedExpressionKind {
     Literal(ParsedLiteralExpression),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ParsedExpression {
+    kind: ParsedExpressionKind,
+    token: Token,
+}
+
+impl ParsedExpression {
+    pub fn new(kind: ParsedExpressionKind, token: Token) -> Self {
+        Self { kind, token }
+    }
+
+    pub fn kind(&self) -> &ParsedExpressionKind {
+        &self.kind
+    }
+
+    pub fn token(&self) -> &Token {
+        &self.token
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Identifier {
+    name: String,
+    token: Token,
+}
+
+impl Identifier {
+    pub fn new(name: String, token: Token) -> Self {
+        Self { name, token }
+    }
+
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    pub fn token(&self) -> &Token {
+        &self.token
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -184,30 +224,38 @@ impl<'source> Parser<'source> {
 
         let type_name = self.parse_type_name()?;
 
-        let name_ident = self.consume_specific(TokenKind::Identifier)?;
-        let name = self.text(&name_ident);
+        let name = self.parse_identifier()?;
 
         self.consume_specific(TokenKind::Equals)?;
 
         let initial_value = self.parse_expression()?;
+
+        if initial_value.is_none() {
+            return Err(BauError::ExpectedExpression {
+                token: self.peek()?.clone(),
+            });
+        }
 
         self.consume_specific(TokenKind::Semicolon)?;
 
         Ok(Some(ParsedStatement::Let {
             name,
             type_name,
-            initial_value,
+            initial_value: initial_value.unwrap(),
         }))
     }
 
     fn parse_expression(&mut self) -> BauResult<Option<ParsedExpression>> {
-        match self.peek_kind()? {
+        let token = self.peek()?.clone();
+        match &token.kind {
             TokenKind::IntLiteral
             | TokenKind::FloatLiteral
             | TokenKind::StringLiteral
-            | TokenKind::BoolLiteral => self
-                .parse_literal_expression()
-                .map(|e| e.map(ParsedExpression::Literal)),
+            | TokenKind::BoolLiteral => self.parse_literal_expression().map(|expression| {
+                expression.map(|expression| {
+                    ParsedExpression::new(ParsedExpressionKind::Literal(expression), token)
+                })
+            }),
             _ => Ok(None),
         }
     }
@@ -240,6 +288,12 @@ impl<'source> Parser<'source> {
             }
             _ => Ok(None),
         }
+    }
+
+    fn parse_identifier(&mut self) -> BauResult<Identifier> {
+        let ident = self.consume_specific(TokenKind::Identifier)?;
+        let name = self.text(&ident);
+        Ok(Identifier { name, token: ident })
     }
 
     fn parse_type_name(&mut self) -> BauResult<TypeName> {

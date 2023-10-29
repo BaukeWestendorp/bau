@@ -1,15 +1,38 @@
 use crate::source::Source;
 use crate::tokenizer::token::TokenKind;
 use crate::tokenizer::Token;
+use crate::typechecker::Type;
 
 use colored::Colorize;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum BauError {
-    UnexpectedToken { token: Token, expected: TokenKind },
-    UnexpectedEndOfFile { token: Token },
-    ExpectedItem { token: Token },
-    UnknownType { token: Token, type_name: String },
+    UnexpectedToken {
+        token: Token,
+        expected: TokenKind,
+    },
+    UnexpectedEndOfFile {
+        token: Token,
+    },
+    ExpectedItem {
+        token: Token,
+    },
+    ExpectedExpression {
+        token: Token,
+    },
+    UnknownType {
+        token: Token,
+        type_name: String,
+    },
+    TypeMismatch {
+        token: Token,
+        expected: Type,
+        actual: Type,
+    },
+    VariableAlreadyExists {
+        token: Token,
+        name: String,
+    },
 }
 
 impl std::fmt::Display for BauError {
@@ -30,8 +53,22 @@ impl std::fmt::Display for BauError {
                     token.kind
                 )
             }
+            Self::ExpectedExpression { token } => {
+                format!("Expected an expression, but found `{}` instead", token.kind)
+            }
             Self::UnknownType { type_name, .. } => {
                 format!("Unknown type `{}`", type_name)
+            }
+            Self::TypeMismatch {
+                expected, actual, ..
+            } => {
+                format!(
+                    "Expected type `{}`, but found `{}` instead",
+                    expected, actual
+                )
+            }
+            Self::VariableAlreadyExists { name, .. } => {
+                format!("Variable `{}` already exists", name)
             }
         };
 
@@ -48,7 +85,10 @@ pub fn print_error(source: &Source, error: &BauError) {
         BauError::UnexpectedToken { token, .. }
         | BauError::UnexpectedEndOfFile { token, .. }
         | BauError::ExpectedItem { token }
-        | BauError::UnknownType { token, .. } => {
+        | BauError::ExpectedExpression { token }
+        | BauError::UnknownType { token, .. }
+        | BauError::TypeMismatch { token, .. }
+        | BauError::VariableAlreadyExists { token, .. } => {
             eprintln!("{}: {}", "error".bright_red(), error.to_string());
 
             print_source_line(

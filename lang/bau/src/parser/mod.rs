@@ -4,6 +4,22 @@ use crate::tokenizer::token::TokenKind;
 use crate::tokenizer::{Token, Tokenizer};
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct TypeName {
+    name: String,
+    token: Token,
+}
+
+impl TypeName {
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    pub fn token(&self) -> &Token {
+        &self.token
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub enum ParsedItem {
     Function(ParsedFunctionItem),
 }
@@ -12,14 +28,14 @@ pub enum ParsedItem {
 pub struct ParsedFunctionItem {
     pub name: String,
     pub arguments: Vec<ParsedFunctionArgument>,
-    pub return_type_name: String,
+    pub return_type_name: TypeName,
     pub body: Vec<ParsedStatement>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ParsedFunctionArgument {
     pub name: String,
-    pub type_name: String,
+    pub type_name: TypeName,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -33,7 +49,7 @@ pub struct Parser<'source> {
 pub enum ParsedStatement {
     Let {
         name: String,
-        type_name: String,
+        type_name: TypeName,
         initial_value: Option<ParsedExpression>,
     },
 }
@@ -97,8 +113,8 @@ impl<'source> Parser<'source> {
         self.consume_specific(TokenKind::ParenClose)?;
 
         self.consume_specific(TokenKind::Arrow)?;
-        let return_type_ident = self.consume_specific(TokenKind::Identifier)?;
-        let return_type_name = self.text(&return_type_ident);
+
+        let return_type_name = self.parse_type_name()?;
 
         self.consume_specific(TokenKind::BraceOpen)?;
         let body = self.parse_statement_list()?;
@@ -132,8 +148,7 @@ impl<'source> Parser<'source> {
     }
 
     fn parse_function_argument(&mut self) -> BauResult<Option<ParsedFunctionArgument>> {
-        let type_ident = self.consume_specific(TokenKind::Identifier)?;
-        let type_name = self.text(&type_ident);
+        let type_name = self.parse_type_name()?;
 
         let name_ident = self.consume_specific(TokenKind::Identifier)?;
         let name = self.text(&name_ident);
@@ -163,8 +178,7 @@ impl<'source> Parser<'source> {
     fn parse_let_statement(&mut self) -> BauResult<Option<ParsedStatement>> {
         self.consume_specific(TokenKind::Let)?;
 
-        let type_ident = self.consume_specific(TokenKind::Identifier)?;
-        let type_name = self.text(&type_ident);
+        let type_name = self.parse_type_name()?;
 
         let name_ident = self.consume_specific(TokenKind::Identifier)?;
         let name = self.text(&name_ident);
@@ -222,6 +236,15 @@ impl<'source> Parser<'source> {
             }
             _ => Ok(None),
         }
+    }
+
+    fn parse_type_name(&mut self) -> BauResult<TypeName> {
+        let type_ident = self.consume_specific(TokenKind::Identifier)?;
+        let name = self.text(&type_ident);
+        Ok(TypeName {
+            name,
+            token: type_ident,
+        })
     }
 
     fn peek(&self) -> BauResult<&Token> {

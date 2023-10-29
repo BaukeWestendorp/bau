@@ -138,6 +138,10 @@ impl<'source> Parser<'source> {
         &mut self,
         arguments: &mut Vec<ParsedFunctionArgument>,
     ) -> BauResult<()> {
+        if self.peek_kind() == Ok(TokenKind::ParenClose) {
+            return Ok(());
+        }
+
         if let Some(argument) = self.parse_function_argument()? {
             arguments.push(argument);
             if self.consume_if(TokenKind::Comma) {

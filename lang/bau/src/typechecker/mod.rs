@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use crate::parser::{
     Identifier, ParsedExpression, ParsedExpressionKind, ParsedFunctionParameter, ParsedItem,
     ParsedItemKind, ParsedLiteralExpression, ParsedStatement, ParsedStatementKind, TypeName,
@@ -34,9 +36,7 @@ impl CheckedItem {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct CheckedFunctionItem {
-    pub name: String,
-    pub parameters: Vec<CheckedFunctionParameter>,
-    pub return_type: Type,
+    pub definition: CheckedFunctionDefinition,
     pub body: Vec<CheckedStatement>,
 }
 
@@ -78,20 +78,10 @@ impl CheckedStatement {
 pub enum CheckedExpression {
     Literal(CheckedLiteralExpression),
     Variable(CheckedVariable),
-}
-
-impl CheckedExpression {
-    pub fn type_(&self) -> Type {
-        match self {
-            Self::Literal(literal) => match literal {
-                CheckedLiteralExpression::Integer(_) => Type::Integer,
-                CheckedLiteralExpression::Float(_) => Type::Float,
-                CheckedLiteralExpression::String(_) => Type::String,
-                CheckedLiteralExpression::Boolean(_) => Type::Boolean,
-            },
-            Self::Variable(variable) => variable.type_.clone(),
-        }
-    }
+    FunctionCall {
+        name: Identifier,
+        arguments: Vec<CheckedExpression>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -132,6 +122,13 @@ impl std::fmt::Display for Type {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct CheckedFunctionDefinition {
+    pub name: String,
+    pub parameters: Vec<CheckedFunctionParameter>,
+    pub return_type: Type,
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct Scope {
     variables: Vec<CheckedVariable>,
 }
@@ -140,6 +137,7 @@ pub struct Scope {
 pub struct Typechecker {
     errors: Vec<TypecheckerError>,
     scope_stack: Vec<Scope>,
+    functions: HashMap<String, CheckedFunctionDefinition>,
 }
 
 impl Typechecker {
@@ -151,10 +149,29 @@ impl Typechecker {
         Self {
             errors: vec![],
             scope_stack: vec![],
+            functions: HashMap::new(),
         }
     }
 
     pub fn check_items(&mut self, items: &[ParsedItem]) -> Vec<CheckedItem> {
+        // First let's find all function definitions
+        for item in items.iter() {
+            match item.kind() {
+                ParsedItemKind::Function(_) => {
+                    let function_definition = match self.check_function_definition(item) {
+                        Ok(function_definition) => function_definition,
+                        Err(error) => {
+                            self.errors.push(error);
+                            continue;
+                        }
+                    };
+                    self.register_function(function_definition);
+                }
+            }
+        }
+
+        // FIXME: We might be able to only check function definitions once somehow.
+        //        Currently we still check the function definitions here again.
         let mut checked_items = vec![];
         for item in items.iter() {
             match item.kind() {
@@ -180,11 +197,47 @@ impl Typechecker {
         &mut self,
         function_item: &ParsedItem,
     ) -> TypecheckerResult<CheckedFunctionItem> {
+        let definition = self.check_function_definition(function_item)?;
+
         let function = match function_item.kind() {
             ParsedItemKind::Function(function) => function,
         };
 
         self.push_scope();
+
+        let body = self.check_function_body(&function.body, &definition.return_type)?;
+
+        let return_statement = body.iter().find(|statement| match statement.kind() {
+            CheckedStatementKind::Return { .. } => true,
+            _ => false,
+        });
+
+        if definition.return_type == Type::Void && return_statement.is_some() {
+            self.pop_scope();
+            return Err(TypecheckerError::new(
+                TypecheckerErrorKind::ReturnValueInVoidFunction,
+                return_statement.unwrap().range().clone(),
+            ));
+        } else if definition.return_type != Type::Void && return_statement.is_none() {
+            self.pop_scope();
+            return Err(TypecheckerError::new(
+                TypecheckerErrorKind::ExpectedReturnValue,
+                function_item.range().clone(),
+            ));
+        }
+
+        self.pop_scope();
+
+        Ok(CheckedFunctionItem { definition, body })
+    }
+
+    fn check_function_definition(
+        &mut self,
+        function_item: &ParsedItem,
+    ) -> TypecheckerResult<CheckedFunctionDefinition> {
+        let function = match function_item.kind() {
+            ParsedItemKind::Function(function) => function,
+        };
 
         let parameters = self.check_function_parameters(&function.parameters)?;
 
@@ -197,34 +250,10 @@ impl Typechecker {
             });
         }
 
-        let body = self.check_function_body(&function.body, &return_type)?;
-
-        let return_statement = body.iter().find(|statement| match statement.kind() {
-            CheckedStatementKind::Return { .. } => true,
-            _ => false,
-        });
-
-        if return_type == Type::Void && return_statement.is_some() {
-            self.pop_scope();
-            return Err(TypecheckerError::new(
-                TypecheckerErrorKind::ReturnValueInVoidFunction,
-                return_statement.unwrap().range().clone(),
-            ));
-        } else if return_type != Type::Void && return_statement.is_none() {
-            self.pop_scope();
-            return Err(TypecheckerError::new(
-                TypecheckerErrorKind::ExpectedReturnValue,
-                function_item.range().clone(),
-            ));
-        }
-
-        self.pop_scope();
-
-        Ok(CheckedFunctionItem {
+        Ok(CheckedFunctionDefinition {
             name: function.name.clone(),
             parameters,
             return_type,
-            body,
         })
     }
 
@@ -281,7 +310,7 @@ impl Typechecker {
             } => {
                 if self.variable_exists(name.name()) {
                     return Err(TypecheckerError::new(
-                        TypecheckerErrorKind::VariableAlreadyExists {
+                        TypecheckerErrorKind::VariableAlreadyDefined {
                             name: name.name().to_string(),
                         },
                         name.token().range.clone(),
@@ -291,11 +320,11 @@ impl Typechecker {
                 let type_ = self.check_type(type_name)?;
                 let checked_initial_value = self.check_expression(initial_value)?;
 
-                if type_ != checked_initial_value.type_() {
+                if type_ != self.expression_type(&checked_initial_value)? {
                     return Err(TypecheckerError::new(
                         TypecheckerErrorKind::TypeMismatch {
                             expected: type_.clone(),
-                            actual: checked_initial_value.type_(),
+                            actual: self.expression_type(&checked_initial_value)?,
                         },
                         type_name.token().range.clone(),
                     ));
@@ -345,11 +374,11 @@ impl Typechecker {
                     let value = value.clone().unwrap();
                     let checked_value = self.check_expression(&value)?;
 
-                    if parent_function_return_type != &checked_value.type_() {
+                    if parent_function_return_type != &self.expression_type(&checked_value)? {
                         return Err(TypecheckerError::new(
                             TypecheckerErrorKind::TypeMismatch {
                                 expected: parent_function_return_type.clone(),
-                                actual: checked_value.type_(),
+                                actual: self.expression_type(&checked_value)?,
                             },
                             value.token().range.clone(),
                         ));
@@ -379,7 +408,7 @@ impl Typechecker {
             ParsedExpressionKind::Variable(ident) => {
                 if !self.variable_exists(ident.name()) {
                     return Err(TypecheckerError::new(
-                        TypecheckerErrorKind::VariableDoesNotExist {
+                        TypecheckerErrorKind::VariableNotDefined {
                             name: ident.name().to_string(),
                         },
                         ident.token().range.clone(),
@@ -388,6 +417,13 @@ impl Typechecker {
 
                 let checked_variable = self.check_variable_expression(ident)?;
                 Ok(CheckedExpression::Variable(checked_variable))
+            }
+            ParsedExpressionKind::FunctionCall { name, arguments } => {
+                // FIXME: Implement arguments
+                Ok(CheckedExpression::FunctionCall {
+                    name: Identifier::new(name.name().to_string(), name.token().clone()),
+                    arguments: vec![],
+                })
             }
         }
     }
@@ -415,7 +451,7 @@ impl Typechecker {
             Ok(variable)
         } else {
             Err(TypecheckerError::new(
-                TypecheckerErrorKind::VariableDoesNotExist {
+                TypecheckerErrorKind::VariableNotDefined {
                     name: ident.name().to_string(),
                 },
                 ident.token().range.clone(),
@@ -439,6 +475,29 @@ impl Typechecker {
         }
     }
 
+    fn expression_type(&self, expression: &CheckedExpression) -> TypecheckerResult<Type> {
+        match expression {
+            CheckedExpression::Literal(literal) => match literal {
+                CheckedLiteralExpression::Integer(_) => Ok(Type::Integer),
+                CheckedLiteralExpression::Float(_) => Ok(Type::Float),
+                CheckedLiteralExpression::String(_) => Ok(Type::String),
+                CheckedLiteralExpression::Boolean(_) => Ok(Type::Boolean),
+            },
+            CheckedExpression::Variable(variable) => Ok(variable.type_.clone()),
+            CheckedExpression::FunctionCall { name, arguments } => {
+                match self.get_function_definition_by_name(name.name()) {
+                    Some(function_definition) => Ok(function_definition.return_type),
+                    None => Err(TypecheckerError::new(
+                        TypecheckerErrorKind::FunctionNotDefined {
+                            name: name.name().to_string(),
+                        },
+                        name.token().range.clone(),
+                    )),
+                }
+            }
+        }
+    }
+
     fn push_scope(&mut self) {
         self.scope_stack.push(Scope { variables: vec![] });
     }
@@ -456,7 +515,7 @@ impl Typechecker {
         self.get_variable_by_name(name).is_some()
     }
 
-    fn get_variable_by_name(&mut self, name: &str) -> Option<CheckedVariable> {
+    fn get_variable_by_name(&self, name: &str) -> Option<CheckedVariable> {
         for scope in self.scope_stack.iter().rev() {
             for variable in scope.variables.iter() {
                 if variable.name == name {
@@ -465,5 +524,13 @@ impl Typechecker {
             }
         }
         None
+    }
+
+    fn register_function(&mut self, function: CheckedFunctionDefinition) {
+        self.functions.insert(function.name.clone(), function);
+    }
+
+    fn get_function_definition_by_name(&self, name: &str) -> Option<CheckedFunctionDefinition> {
+        self.functions.get(name).cloned()
     }
 }

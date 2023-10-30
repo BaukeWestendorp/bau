@@ -1,11 +1,15 @@
 use crate::error::print_error;
 use crate::source::Source;
+use crate::typechecker::CheckedFunctionItem;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ExecutionErrorKind {
     MainFunctionNotFound,
     VariableDoesNotExist { name: String },
     VariableAlreadyExists { name: String },
+    FunctionNotDefined { name: String },
+    InvalidArgument { function: CheckedFunctionItem },
+    InvalidNumberOfArguments { function: CheckedFunctionItem },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -36,6 +40,21 @@ impl std::fmt::Display for ExecutionError {
             }
             ExecutionErrorKind::VariableAlreadyExists { name } => {
                 format!("Variable `{}` already exists", name)
+            }
+            ExecutionErrorKind::FunctionNotDefined { name } => {
+                format!("Function `{}` is not defined", name)
+            }
+            ExecutionErrorKind::InvalidArgument { function } => {
+                format!(
+                    "Invalid argument for function `{}`",
+                    function.definition.name
+                )
+            }
+            ExecutionErrorKind::InvalidNumberOfArguments { function } => {
+                format!(
+                    "Invalid number of arguments for function `{}`",
+                    function.definition.name
+                )
             }
         };
 

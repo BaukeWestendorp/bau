@@ -65,8 +65,6 @@ impl Scope {
     }
 }
 
-type FunctionArguments = HashMap<String, Value>;
-
 #[derive(Debug, Clone, PartialEq)]
 enum ControlFlowMode {
     Return(Option<Value>),
@@ -100,19 +98,32 @@ impl Interpreter {
             }
         };
 
-        self.execute_function(&main_function, HashMap::new())
+        self.execute_function(&main_function, vec![])
     }
 
     fn execute_function(
         &mut self,
         function: &CheckedFunctionItem,
-        arguments: FunctionArguments,
+        arguments: Vec<CheckedExpression>,
     ) -> ExecutionResult<Option<Value>> {
         self.push_scope();
 
-        for argument in arguments.iter() {
-            self.current_scope_mut()
-                .declare_variable(argument.0, argument.1.clone())?;
+        if arguments.len() != function.definition.parameters.len() {
+            return Err(ExecutionError::new(
+                ExecutionErrorKind::InvalidNumberOfArguments {
+                    function: function.clone(),
+                },
+            ));
+        };
+        for (i, argument) in arguments.iter().enumerate() {
+            if let Some(value) = self.evaluate_expression(argument)? {
+                self.current_scope_mut()
+                    .declare_variable(&function.definition.parameters[i].name, value)?;
+            } else {
+                return Err(ExecutionError::new(ExecutionErrorKind::InvalidArgument {
+                    function: function.clone(),
+                }));
+            }
         }
 
         for statement in &function.body {
@@ -184,6 +195,20 @@ impl Interpreter {
                     .get_variable_by_name(&variable.name)?;
                 Ok(Some(value.clone()))
             }
+            CheckedExpression::FunctionCall { name, arguments } => {
+                let function = match self.get_function_by_name(name.name()) {
+                    Some(function) => function.clone(),
+                    None => {
+                        return Err(ExecutionError::new(
+                            ExecutionErrorKind::FunctionNotDefined {
+                                name: name.name().to_string(),
+                            },
+                        ))
+                    }
+                };
+                let return_value = self.execute_function(&function, arguments.clone())?;
+                Ok(return_value)
+            }
         }
     }
 
@@ -192,7 +217,7 @@ impl Interpreter {
             match item.kind() {
                 CheckedItemKind::Function(function) => {
                     self.functions
-                        .insert(function.name.clone(), function.clone());
+                        .insert(function.definition.name.clone(), function.clone());
                 }
             }
         }
@@ -212,5 +237,9 @@ impl Interpreter {
 
     fn current_scope_mut(&mut self) -> &mut Scope {
         self.scope_stack.last_mut().unwrap()
+    }
+
+    fn get_function_by_name(&self, name: &str) -> Option<&CheckedFunctionItem> {
+        self.functions.get(name)
     }
 }

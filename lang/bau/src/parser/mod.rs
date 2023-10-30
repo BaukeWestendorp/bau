@@ -106,6 +106,10 @@ impl ParsedStatement {
 pub enum ParsedExpressionKind {
     Literal(ParsedLiteralExpression),
     Variable(Identifier),
+    FunctionCall {
+        name: Identifier,
+        arguments: Vec<ParsedExpression>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -380,10 +384,25 @@ impl<'source> Parser<'source> {
     fn parse_identifier_expression(&mut self) -> ParserResult<Option<ParsedExpression>> {
         let token = self.peek()?.clone();
         let ident = self.parse_identifier()?;
-        Ok(Some(ParsedExpression::new(
-            ParsedExpressionKind::Variable(ident),
-            token,
-        )))
+
+        match self.peek_kind()? {
+            TokenKind::ParenOpen => {
+                self.consume_specific(TokenKind::ParenOpen)?;
+                // FIXME: Parse arguments
+                self.consume_specific(TokenKind::ParenClose)?;
+                Ok(Some(ParsedExpression::new(
+                    ParsedExpressionKind::FunctionCall {
+                        name: ident,
+                        arguments: vec![],
+                    },
+                    token,
+                )))
+            }
+            _ => Ok(Some(ParsedExpression::new(
+                ParsedExpressionKind::Variable(ident),
+                token,
+            ))),
+        }
     }
 
     fn parse_identifier(&mut self) -> ParserResult<Identifier> {
@@ -402,9 +421,13 @@ impl<'source> Parser<'source> {
     }
 
     fn peek(&self) -> ParserResult<&Token> {
+        self.peek_at(0)
+    }
+
+    fn peek_at(&self, offset: usize) -> ParserResult<&Token> {
         self.tokens
             .iter()
-            .nth(self.cursor)
+            .nth(self.cursor + offset)
             .map(Ok)
             .unwrap_or(Err(ParserError::new(
                 ParserErrorKind::UnexpectedEndOfFile,
@@ -417,7 +440,11 @@ impl<'source> Parser<'source> {
     }
 
     fn peek_kind(&self) -> ParserResult<TokenKind> {
-        self.peek().map(|t| t.kind)
+        self.peek_kind_at(0)
+    }
+
+    fn peek_kind_at(&self, offset: usize) -> ParserResult<TokenKind> {
+        self.peek_at(offset).map(|token| token.kind)
     }
 
     fn consume(&mut self) -> ParserResult<Token> {

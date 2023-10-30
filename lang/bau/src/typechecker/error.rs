@@ -7,8 +7,9 @@ use super::Type;
 pub enum TypecheckerErrorKind {
     UnknownType { type_name: String },
     TypeMismatch { expected: Type, actual: Type },
-    VariableAlreadyExists { name: String },
-    VariableDoesNotExist { name: String },
+    VariableAlreadyDefined { name: String },
+    VariableNotDefined { name: String },
+    FunctionNotDefined { name: String },
     ReturnValueInVoidFunction,
     ExpectedReturnValue,
 }
@@ -43,11 +44,14 @@ impl std::fmt::Display for TypecheckerError {
                     expected, actual
                 )
             }
-            TypecheckerErrorKind::VariableAlreadyExists { name } => {
-                format!("Variable `{}` already exists", name)
+            TypecheckerErrorKind::VariableAlreadyDefined { name } => {
+                format!("Variable `{}` is already defined", name)
             }
-            TypecheckerErrorKind::VariableDoesNotExist { name } => {
-                format!("Variable `{}` does not exist", name)
+            TypecheckerErrorKind::VariableNotDefined { name } => {
+                format!("Variable `{}` is not defined", name)
+            }
+            TypecheckerErrorKind::FunctionNotDefined { name } => {
+                format!("Function `{}` is not defined", name)
             }
             TypecheckerErrorKind::ReturnValueInVoidFunction => {
                 format!("Cannot return a value in a void function")

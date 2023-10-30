@@ -1,4 +1,4 @@
-use crate::source::Source;
+use crate::source::{CodeRange, Source};
 use crate::tokenizer::token::TokenKind;
 use crate::tokenizer::Token;
 use crate::typechecker::Type;
@@ -12,7 +12,7 @@ pub enum BauError {
         expected: TokenKind,
     },
     UnexpectedEndOfFile {
-        token: Token,
+        range: CodeRange,
     },
     ExpectedItem {
         token: Token,
@@ -21,39 +21,51 @@ pub enum BauError {
         token: Token,
     },
     UnknownType {
-        token: Token,
+        range: CodeRange,
         type_name: String,
     },
     TypeMismatch {
-        token: Token,
+        range: CodeRange,
         expected: Type,
         actual: Type,
     },
     VariableAlreadyExists {
-        token: Token,
+        range: CodeRange,
         name: String,
+    },
+    VariableDoesNotExist {
+        range: CodeRange,
+        name: String,
+    },
+    ReturnValueInVoidFunction {
+        range: CodeRange,
+    },
+    ExpectedReturnValue {
+        range: CodeRange,
     },
 }
 
 impl std::fmt::Display for BauError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let str = match self {
-            Self::UnexpectedToken { token, expected } => {
+            Self::UnexpectedToken {
+                token, expected, ..
+            } => {
                 format!(
                     "Expected token `{}`, but found `{}` instead",
-                    expected, token.kind,
+                    expected, token.kind
                 )
             }
             Self::UnexpectedEndOfFile { .. } => {
                 format!("Expected a token, but found end of file instead")
             }
-            Self::ExpectedItem { token } => {
+            Self::ExpectedItem { token, .. } => {
                 format!(
                     "Expected an item (`fn` or `extend`), but found `{}` instead",
                     token.kind
                 )
             }
-            Self::ExpectedExpression { token } => {
+            Self::ExpectedExpression { token, .. } => {
                 format!("Expected an expression, but found `{}` instead", token.kind)
             }
             Self::UnknownType { type_name, .. } => {
@@ -70,6 +82,15 @@ impl std::fmt::Display for BauError {
             Self::VariableAlreadyExists { name, .. } => {
                 format!("Variable `{}` already exists", name)
             }
+            Self::VariableDoesNotExist { name, .. } => {
+                format!("Variable `{}` does not exist", name)
+            }
+            Self::ReturnValueInVoidFunction { .. } => {
+                format!("Cannot return a value in a void function")
+            }
+            Self::ExpectedReturnValue { .. } => {
+                format!("Expected a return value")
+            }
         };
 
         write!(f, "{}", str)
@@ -81,38 +102,71 @@ pub type BauResult<T> = Result<T, BauError>;
 pub fn print_error(source: &Source, error: &BauError) {
     let max_line_number_len = source.lines().len().to_string().len();
 
-    match error {
-        BauError::UnexpectedToken { token, .. }
-        | BauError::UnexpectedEndOfFile { token, .. }
-        | BauError::ExpectedItem { token }
-        | BauError::ExpectedExpression { token }
-        | BauError::UnknownType { token, .. }
-        | BauError::TypeMismatch { token, .. }
-        | BauError::VariableAlreadyExists { token, .. } => {
-            eprintln!("{}: {}", "error".bright_red(), error.to_string());
+    let range = match error {
+        BauError::UnexpectedToken { token, .. } => token.range.clone(),
+        BauError::UnexpectedEndOfFile { range, .. } => range.clone(),
+        BauError::ExpectedItem { token, .. } => token.range.clone(),
+        BauError::ExpectedExpression { token, .. } => token.range.clone(),
+        BauError::UnknownType { range, .. } => range.clone(),
+        BauError::TypeMismatch { range, .. } => range.clone(),
+        BauError::VariableAlreadyExists { range, .. } => range.clone(),
+        BauError::VariableDoesNotExist { range, .. } => range.clone(),
+        BauError::ReturnValueInVoidFunction { range, .. } => range.clone(),
+        BauError::ExpectedReturnValue { range } => range.clone(),
+    };
 
+    eprintln!("{}: {}", "error".bright_red(), error.to_string());
+
+    // Multiline error
+    let lines = source.text()[range.span.start..range.span.end].lines();
+    let line_count = lines.clone().count();
+    let mut cursor = 0;
+    for (line_number, line) in lines.clone().enumerate() {
+        if line_number == 0 {
             print_source_line(
                 source,
                 max_line_number_len,
-                token.coords.line,
-                token.coords.column,
-                token.len(),
-            );
-
-            print_line_gutter(max_line_number_len, None);
-
-            eprintln!(
-                "{}",
-                format!(
-                    "{}{} {}",
-                    " ".repeat(token.coords.column),
-                    "^".repeat(usize::max(1, token.len())),
-                    error.to_string()
-                )
-                .bright_red()
-            );
+                range.coords.line,
+                range.coords.column,
+                line.len(),
+            )
+        } else if line_number == line_count - 1 {
+            let len = range.span.len() - cursor;
+            print_source_line(
+                source,
+                max_line_number_len,
+                range.coords.line + line_number,
+                0,
+                len,
+            )
+        } else {
+            print_source_line(
+                source,
+                max_line_number_len,
+                range.coords.line + line_number,
+                0,
+                line.len(),
+            )
         }
+        cursor += line.len() + 1;
     }
+
+    let underline_length = match line_count {
+        1 => range.span.len(),
+        _ => lines.map(|line| line.len()).max().unwrap(),
+    };
+
+    print_line_gutter(max_line_number_len, None);
+    eprintln!(
+        "{}",
+        format!(
+            "{}{} {}",
+            " ".repeat(range.coords.column),
+            "^".repeat(usize::max(1, underline_length)),
+            error.to_string()
+        )
+        .bright_red()
+    );
 }
 
 fn print_line_gutter(max_line_number_len: usize, line_number: Option<usize>) {

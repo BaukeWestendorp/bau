@@ -1,6 +1,8 @@
 pub use token::Token;
 
-use self::token::{SourceCoords, Span, TokenKind};
+use crate::source::{CodeRange, SourceCoords, Span};
+
+use self::token::TokenKind;
 
 mod rule;
 pub mod token;
@@ -86,8 +88,10 @@ impl<'input> Tokenizer<'input> {
     fn token(&mut self, kind: TokenKind, len: usize) -> Token {
         let token = Token::new(
             kind,
-            Span::new(self.cursor, self.cursor + len),
-            SourceCoords::new(self.line, self.column),
+            CodeRange::new(
+                Span::new(self.cursor, self.cursor + len),
+                SourceCoords::new(self.line, self.column),
+            ),
         );
         for char in self.input[self.cursor..self.cursor + len].chars() {
             self.column += 1;

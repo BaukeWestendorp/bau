@@ -1,3 +1,5 @@
+use crate::source::CodeRange;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum TokenKind {
     // Keywords
@@ -120,48 +122,19 @@ impl std::fmt::Display for TokenKind {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Token {
     pub kind: TokenKind,
-    pub span: Span,
-    pub coords: SourceCoords,
+    pub range: CodeRange,
 }
 
 impl Token {
-    pub fn new(kind: TokenKind, span: Span, coords: SourceCoords) -> Self {
-        Self { kind, span, coords }
+    pub fn new(kind: TokenKind, range: CodeRange) -> Self {
+        Self { kind, range }
     }
 
     pub fn len(&self) -> usize {
-        self.span.len()
+        self.range.span.len()
     }
 
     pub fn is(&self, kind: TokenKind) -> bool {
         self.kind == kind
-    }
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct Span {
-    pub start: usize,
-    pub end: usize,
-}
-
-impl Span {
-    pub fn new(start: usize, end: usize) -> Self {
-        Self { start, end }
-    }
-
-    pub fn len(&self) -> usize {
-        self.end - self.start
-    }
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct SourceCoords {
-    pub line: usize,
-    pub column: usize,
-}
-
-impl SourceCoords {
-    pub fn new(line: usize, column: usize) -> Self {
-        Self { line, column }
     }
 }

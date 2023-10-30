@@ -110,6 +110,15 @@ pub enum ParsedExpressionKind {
         name: Identifier,
         arguments: Vec<ParsedExpression>,
     },
+    PrefixOperator {
+        operator: TokenKind,
+        expression: Box<ParsedExpression>,
+    },
+    InfixOperator {
+        operator: TokenKind,
+        left: Box<ParsedExpression>,
+        right: Box<ParsedExpression>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -263,6 +272,29 @@ impl<'source> Parser<'source> {
         Ok(Some(ParsedFunctionParameter { name, type_name }))
     }
 
+    fn parse_function_arguments(&mut self) -> ParserResult<Vec<ParsedExpression>> {
+        let mut arguments = vec![];
+        self.parse_next_function_argument(&mut arguments)?;
+        Ok(arguments)
+    }
+
+    fn parse_next_function_argument(
+        &mut self,
+        arguments: &mut Vec<ParsedExpression>,
+    ) -> ParserResult<()> {
+        if self.peek_kind() == Ok(TokenKind::ParenClose) {
+            return Ok(());
+        }
+
+        if let Some(argument) = self.parse_expression()? {
+            arguments.push(argument);
+            if self.consume_if(TokenKind::Comma) {
+                self.parse_next_function_argument(arguments)?;
+            }
+        }
+        Ok(())
+    }
+
     fn parse_statement_list(&mut self) -> ParserResult<Vec<ParsedStatement>> {
         let mut statements = vec![];
         while self.peek_kind() != Ok(TokenKind::BraceClose) {
@@ -336,49 +368,171 @@ impl<'source> Parser<'source> {
     }
 
     fn parse_expression(&mut self) -> ParserResult<Option<ParsedExpression>> {
+        self.parse_pratt_expression(0)
+    }
+
+    fn parse_pratt_expression(
+        &mut self,
+        min_binding_power: u8,
+    ) -> ParserResult<Option<ParsedExpression>> {
         let token = self.peek()?.clone();
-        match &token.kind {
+
+        let mut lhs = self.parse_primary_expression(false)?;
+
+        loop {
+            let op = match self.peek_kind()? {
+                op @ (TokenKind::Plus
+                | TokenKind::Minus
+                | TokenKind::Asterisk
+                | TokenKind::Slash
+                | TokenKind::Percent
+                | TokenKind::EqualsEquals
+                | TokenKind::ExclamationMarkEquals
+                | TokenKind::LessThan
+                | TokenKind::LessThanEquals
+                | TokenKind::GreaterThan
+                | TokenKind::GreaterThanEquals
+                | TokenKind::AmpersandAmpersand
+                | TokenKind::PipePipe) => op,
+                _ => break,
+            };
+
+            if let Some((left_binding_power, right_binding_power)) = infix_binding_power(op) {
+                if left_binding_power < min_binding_power {
+                    break;
+                }
+
+                self.consume_specific(op)?;
+                let rhs = self.parse_pratt_expression(right_binding_power)?;
+                lhs = Some(ParsedExpression::new(
+                    ParsedExpressionKind::InfixOperator {
+                        operator: op,
+                        left: Box::new(lhs.unwrap()),
+                        right: Box::new(rhs.unwrap()),
+                    },
+                    token.clone(),
+                ));
+
+                continue;
+            }
+            break;
+        }
+
+        Ok(lhs)
+    }
+
+    fn parse_primary_expression(
+        &mut self,
+        ignore_members: bool,
+    ) -> ParserResult<Option<ParsedExpression>> {
+        match self.peek_kind()? {
             TokenKind::IntLiteral
             | TokenKind::FloatLiteral
             | TokenKind::StringLiteral
-            | TokenKind::BoolLiteral => self.parse_literal_expression().map(|expression| {
-                expression.map(|expression| {
-                    ParsedExpression::new(ParsedExpressionKind::Literal(expression), token)
-                })
-            }),
-            TokenKind::Identifier => self.parse_identifier_expression(),
-            _ => Ok(None),
+            | TokenKind::BoolLiteral => self.parse_literal_expression(),
+            TokenKind::Identifier => match self.peek_kind_at(1) {
+                Ok(TokenKind::ParenOpen) => self.parse_function_call_expression(),
+                Ok(TokenKind::Period) if !ignore_members => match self.peek_kind_at(2) {
+                    Ok(TokenKind::Identifier) => match self.peek_kind_at(3)? {
+                        TokenKind::ParenOpen => self.parse_method_call_expression(),
+                        _ => todo!(),
+                    },
+                    Err(_) => Ok(None),
+                    _ => todo!(),
+                },
+                Err(_) => Ok(None),
+                _ => self.parse_identifier_expression(),
+            },
+            TokenKind::Plus | TokenKind::Minus | TokenKind::ExclamationMark => {
+                self.parse_prefix_operator_expression()
+            }
+            TokenKind::ParenOpen => {
+                self.consume_specific(TokenKind::ParenOpen)?;
+                let expr = self.parse_pratt_expression(0);
+                self.consume_specific(TokenKind::ParenClose)?;
+                expr
+            }
+            invalid_kind => Err(ParserError::new(
+                ParserErrorKind::InvalidExpressionStart {
+                    found: invalid_kind,
+                },
+                self.peek()?.range.clone(),
+            )),
+        }
+    }
+    fn parse_prefix_operator_expression(&mut self) -> ParserResult<Option<ParsedExpression>> {
+        let token = self.consume()?;
+        match token.kind {
+            TokenKind::Plus | TokenKind::Minus | TokenKind::ExclamationMark => {
+                if let Some(expression) = self.parse_primary_expression(false)? {
+                    Ok(Some(ParsedExpression::new(
+                        ParsedExpressionKind::PrefixOperator {
+                            operator: token.kind,
+                            expression: Box::new(expression),
+                        },
+                        token.clone(),
+                    )))
+                } else {
+                    Err(ParserError::new(
+                        ParserErrorKind::ExpectedExpression {
+                            found: self.peek_kind()?,
+                        },
+                        self.peek()?.range.clone(),
+                    ))
+                }
+            }
+            _ => return Ok(None),
         }
     }
 
-    fn parse_literal_expression(&mut self) -> ParserResult<Option<ParsedLiteralExpression>> {
-        match self.peek_kind()? {
+    fn parse_literal_expression(&mut self) -> ParserResult<Option<ParsedExpression>> {
+        let literal = match self.peek_kind()? {
             TokenKind::IntLiteral => {
                 let string_value = self.consume_specific(TokenKind::IntLiteral)?;
                 let string_value_text = self.text(&string_value);
                 let value = string_value_text.parse::<i64>().unwrap();
-                Ok(Some(ParsedLiteralExpression::Integer(value)))
+                ParsedLiteralExpression::Integer(value)
             }
             TokenKind::FloatLiteral => {
                 let string_value = self.consume_specific(TokenKind::FloatLiteral)?;
                 let string_value_text = self.text(&string_value);
                 let value = string_value_text.parse::<f64>().unwrap();
-                Ok(Some(ParsedLiteralExpression::Float(value)))
+                ParsedLiteralExpression::Float(value)
             }
             TokenKind::StringLiteral => {
                 let string_value = self.consume_specific(TokenKind::StringLiteral)?;
                 let string_value_text = self.text(&string_value);
                 let value = string_value_text[1..string_value_text.len() - 1].to_string();
-                Ok(Some(ParsedLiteralExpression::String(value)))
+                ParsedLiteralExpression::String(value)
             }
             TokenKind::BoolLiteral => {
                 let string_value = self.consume_specific(TokenKind::BoolLiteral)?;
                 let string_value_text = self.text(&string_value);
                 let value = string_value_text.parse::<bool>().unwrap();
-                Ok(Some(ParsedLiteralExpression::Boolean(value)))
+                ParsedLiteralExpression::Boolean(value)
             }
-            _ => Ok(None),
-        }
+            _ => return Ok(None),
+        };
+
+        Ok(Some(ParsedExpression::new(
+            ParsedExpressionKind::Literal(literal),
+            self.peek()?.clone(),
+        )))
+    }
+
+    fn parse_function_call_expression(&mut self) -> ParserResult<Option<ParsedExpression>> {
+        let name = self.parse_identifier()?;
+        self.consume_specific(TokenKind::ParenOpen)?;
+        let arguments = self.parse_function_arguments()?;
+        self.consume_specific(TokenKind::ParenClose)?;
+        Ok(Some(ParsedExpression::new(
+            ParsedExpressionKind::FunctionCall { name, arguments },
+            self.peek()?.clone(),
+        )))
+    }
+
+    fn parse_method_call_expression(&mut self) -> ParserResult<Option<ParsedExpression>> {
+        todo!("Method calls are not implemented yet");
     }
 
     fn parse_identifier_expression(&mut self) -> ParserResult<Option<ParsedExpression>> {
@@ -386,18 +540,7 @@ impl<'source> Parser<'source> {
         let ident = self.parse_identifier()?;
 
         match self.peek_kind()? {
-            TokenKind::ParenOpen => {
-                self.consume_specific(TokenKind::ParenOpen)?;
-                // FIXME: Parse arguments
-                self.consume_specific(TokenKind::ParenClose)?;
-                Ok(Some(ParsedExpression::new(
-                    ParsedExpressionKind::FunctionCall {
-                        name: ident,
-                        arguments: vec![],
-                    },
-                    token,
-                )))
-            }
+            TokenKind::ParenOpen => self.parse_function_call_expression(),
             _ => Ok(Some(ParsedExpression::new(
                 ParsedExpressionKind::Variable(ident),
                 token,
@@ -491,4 +634,19 @@ pub fn preprocess_tokens(tokens: &mut Vec<Token>) {
             && !token.is(TokenKind::Comment)
             && !token.is(TokenKind::EndOfLine)
     });
+}
+
+fn infix_binding_power(op: TokenKind) -> Option<(u8, u8)> {
+    match op {
+        TokenKind::PipePipe => Some((1, 2)),
+        TokenKind::AmpersandAmpersand => Some((3, 4)),
+        TokenKind::EqualsEquals | TokenKind::ExclamationMarkEquals => Some((5, 6)),
+        TokenKind::LessThan
+        | TokenKind::LessThanEquals
+        | TokenKind::GreaterThan
+        | TokenKind::GreaterThanEquals => Some((7, 8)),
+        TokenKind::Plus | TokenKind::Minus => Some((9, 10)),
+        TokenKind::Asterisk | TokenKind::Slash | TokenKind::Percent => Some((11, 12)),
+        _ => None,
+    }
 }

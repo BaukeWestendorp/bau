@@ -34,7 +34,7 @@ fn match_regex(input: &str, r: &Regex) -> Option<usize> {
 
 lazy_static! {
     static ref STRING_REGEX: Regex = Regex::new(r#"^"((\\"|\\\\)|[^\\"])*""#).unwrap();
-    static ref INT_REGEX: Regex = Regex::new(r#"^[+-]?\d+"#).unwrap();
+    static ref INT_REGEX: Regex = Regex::new(r#"^\d+"#).unwrap();
     static ref FLOAT_REGEX: Regex =
         Regex::new(r#"^((\d+(\.\d+)?)|(\.\d+))([Ee](\+|-)?\d+)?"#).unwrap();
     static ref BOOL_REGEX: Regex = Regex::new(r#"^\b(?:true|false)\b"#).unwrap();

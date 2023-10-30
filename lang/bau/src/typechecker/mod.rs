@@ -6,6 +6,7 @@ use crate::parser::{
 };
 
 use crate::source::CodeRange;
+use crate::tokenizer::token::TokenKind;
 
 pub mod error;
 
@@ -81,6 +82,15 @@ pub enum CheckedExpression {
     FunctionCall {
         name: Identifier,
         arguments: Vec<CheckedExpression>,
+    },
+    PrefixOperator {
+        operator: TokenKind,
+        expression: Box<CheckedExpression>,
+    },
+    InfixOperator {
+        left: Box<CheckedExpression>,
+        operator: TokenKind,
+        right: Box<CheckedExpression>,
     },
 }
 
@@ -158,7 +168,7 @@ impl Typechecker {
         for item in items.iter() {
             match item.kind() {
                 ParsedItemKind::Function(_) => {
-                    let function_definition = match self.check_function_definition(item) {
+                    let function_definition = match self.check_function_definition(item, false) {
                         Ok(function_definition) => function_definition,
                         Err(error) => {
                             self.errors.push(error);
@@ -197,13 +207,13 @@ impl Typechecker {
         &mut self,
         function_item: &ParsedItem,
     ) -> TypecheckerResult<CheckedFunctionItem> {
-        let definition = self.check_function_definition(function_item)?;
+        self.push_scope();
+
+        let definition = self.check_function_definition(function_item, true)?;
 
         let function = match function_item.kind() {
             ParsedItemKind::Function(function) => function,
         };
-
-        self.push_scope();
 
         let body = self.check_function_body(&function.body, &definition.return_type)?;
 
@@ -234,6 +244,7 @@ impl Typechecker {
     fn check_function_definition(
         &mut self,
         function_item: &ParsedItem,
+        register_parameters: bool,
     ) -> TypecheckerResult<CheckedFunctionDefinition> {
         let function = match function_item.kind() {
             ParsedItemKind::Function(function) => function,
@@ -243,11 +254,13 @@ impl Typechecker {
 
         let return_type = self.check_type(&function.return_type_name)?;
 
-        for parameter in parameters.iter() {
-            self.register_var_in_current_scope(CheckedVariable {
-                name: parameter.name.clone(),
-                type_: parameter.type_.clone(),
-            });
+        if register_parameters {
+            for parameter in parameters.iter() {
+                self.register_var_in_current_scope(CheckedVariable {
+                    name: parameter.name.clone(),
+                    type_: parameter.type_.clone(),
+                });
+            }
         }
 
         Ok(CheckedFunctionDefinition {
@@ -419,10 +432,39 @@ impl Typechecker {
                 Ok(CheckedExpression::Variable(checked_variable))
             }
             ParsedExpressionKind::FunctionCall { name, arguments } => {
-                // FIXME: Implement arguments
+                let mut checked_arguments = vec![];
+                for argument in arguments.iter() {
+                    let checked_argument = self.check_expression(argument)?;
+                    checked_arguments.push(checked_argument);
+                }
+
                 Ok(CheckedExpression::FunctionCall {
                     name: Identifier::new(name.name().to_string(), name.token().clone()),
-                    arguments: vec![],
+                    arguments: checked_arguments,
+                })
+            }
+            ParsedExpressionKind::PrefixOperator {
+                operator,
+                expression,
+            } => {
+                let checked_expression = self.check_expression(expression)?;
+                Ok(CheckedExpression::PrefixOperator {
+                    operator: operator.clone(),
+                    expression: Box::new(checked_expression),
+                })
+            }
+            ParsedExpressionKind::InfixOperator {
+                left,
+                operator,
+                right,
+            } => {
+                let checked_left = self.check_expression(left)?;
+                let checked_right = self.check_expression(right)?;
+
+                Ok(CheckedExpression::InfixOperator {
+                    left: Box::new(checked_left),
+                    operator: operator.clone(),
+                    right: Box::new(checked_right),
                 })
             }
         }
@@ -484,7 +526,7 @@ impl Typechecker {
                 CheckedLiteralExpression::Boolean(_) => Ok(Type::Boolean),
             },
             CheckedExpression::Variable(variable) => Ok(variable.type_.clone()),
-            CheckedExpression::FunctionCall { name, arguments } => {
+            CheckedExpression::FunctionCall { name, .. } => {
                 match self.get_function_definition_by_name(name.name()) {
                     Some(function_definition) => Ok(function_definition.return_type),
                     None => Err(TypecheckerError::new(
@@ -493,6 +535,67 @@ impl Typechecker {
                         },
                         name.token().range.clone(),
                     )),
+                }
+            }
+            CheckedExpression::PrefixOperator {
+                operator,
+                expression,
+            } => match operator {
+                TokenKind::Minus | TokenKind::Plus => match self.expression_type(expression) {
+                    Ok(Type::Integer) => Ok(Type::Integer),
+                    Ok(Type::Float) => Ok(Type::Float),
+                    _ => Err(TypecheckerError::new(
+                        TypecheckerErrorKind::TypeMismatch {
+                            expected: Type::Integer,
+                            actual: self.expression_type(expression)?,
+                        },
+                        todo!(),
+                    )),
+                },
+                TokenKind::ExclamationMark => Ok(Type::Boolean),
+                _ => panic!("Invalid prefix operator"),
+            },
+            CheckedExpression::InfixOperator {
+                left,
+                operator,
+                right,
+            } => {
+                let left_type = self.expression_type(left)?;
+                let right_type = self.expression_type(right)?;
+
+                if left_type != right_type {
+                    return Err(TypecheckerError::new(
+                        TypecheckerErrorKind::TypeMismatch {
+                            expected: left_type.clone(),
+                            actual: right_type.clone(),
+                        },
+                        todo!(),
+                    ));
+                }
+
+                match operator {
+                    TokenKind::Plus
+                    | TokenKind::Minus
+                    | TokenKind::Asterisk
+                    | TokenKind::Slash
+                    | TokenKind::Percent
+                    | TokenKind::EqualsEquals
+                    | TokenKind::ExclamationMarkEquals
+                    | TokenKind::LessThan
+                    | TokenKind::LessThanEquals
+                    | TokenKind::GreaterThan
+                    | TokenKind::GreaterThanEquals => match left_type {
+                        Type::Integer => Ok(Type::Integer),
+                        Type::Float => Ok(Type::Float),
+                        Type::String => Ok(Type::String),
+                        Type::Boolean => Ok(Type::Boolean),
+                        _ => panic!("Invalid infix operator"),
+                    },
+                    TokenKind::AmpersandAmpersand | TokenKind::PipePipe => match left_type {
+                        Type::Boolean => Ok(Type::Boolean),
+                        _ => panic!("Invalid infix operator"),
+                    },
+                    _ => panic!("Invalid infix operator"),
                 }
             }
         }

@@ -15,6 +15,9 @@ pub enum ParserErrorKind {
     ExpectedExpression {
         found: TokenKind,
     },
+    InvalidExpressionStart {
+        found: TokenKind,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -55,6 +58,9 @@ impl std::fmt::Display for ParserError {
             }
             ParserErrorKind::ExpectedExpression { found } => {
                 format!("Expected an expression, but found `{}` instead", found)
+            }
+            ParserErrorKind::InvalidExpressionStart { found } => {
+                format!("Invalid start of expression `{}`", found)
             }
         };
 

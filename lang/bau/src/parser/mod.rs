@@ -1,7 +1,12 @@
-use crate::error::{BauError, BauResult};
 use crate::source::{CodeRange, Source};
 use crate::tokenizer::token::TokenKind;
 use crate::tokenizer::{Token, Tokenizer};
+
+pub mod error;
+
+pub use error::ParserError;
+
+use self::error::{ParserErrorKind, ParserResult};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct TypeName {
@@ -47,13 +52,13 @@ impl ParsedItem {
 #[derive(Debug, Clone, PartialEq)]
 pub struct ParsedFunctionItem {
     pub name: String,
-    pub arguments: Vec<ParsedFunctionArgument>,
+    pub parameters: Vec<ParsedFunctionParameter>,
     pub return_type_name: TypeName,
     pub body: Vec<ParsedStatement>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct ParsedFunctionArgument {
+pub struct ParsedFunctionParameter {
     pub name: String,
     pub type_name: TypeName,
 }
@@ -162,22 +167,25 @@ impl<'source> Parser<'source> {
         }
     }
 
-    pub fn parse_top_level(&mut self) -> BauResult<Vec<ParsedItem>> {
+    pub fn parse_top_level(&mut self) -> ParserResult<Vec<ParsedItem>> {
         let mut items = vec![];
         while !self.done() {
             match self.parse_item()? {
                 Some(item) => items.push(item),
                 _ => {
-                    return Err(BauError::ExpectedItem {
-                        token: self.peek()?.clone(),
-                    })
+                    return Err(ParserError::new(
+                        ParserErrorKind::ExpectedItem {
+                            found: self.peek_kind()?,
+                        },
+                        self.peek()?.range.clone(),
+                    ))
                 }
             }
         }
         Ok(items)
     }
 
-    fn parse_item(&mut self) -> BauResult<Option<ParsedItem>> {
+    fn parse_item(&mut self) -> ParserResult<Option<ParsedItem>> {
         let start = self.peek()?.clone();
         match self.peek_kind()? {
             TokenKind::Fn => self.parse_function_item().map(|f| {
@@ -193,14 +201,14 @@ impl<'source> Parser<'source> {
         }
     }
 
-    fn parse_function_item(&mut self) -> BauResult<Option<ParsedFunctionItem>> {
+    fn parse_function_item(&mut self) -> ParserResult<Option<ParsedFunctionItem>> {
         self.consume_specific(TokenKind::Fn)?;
 
         let name_ident = self.consume_specific(TokenKind::Identifier)?;
         let name = self.text(&name_ident);
 
         self.consume_specific(TokenKind::ParenOpen)?;
-        let arguments = self.parse_function_arguments()?;
+        let parameters = self.parse_function_parameters()?;
         self.consume_specific(TokenKind::ParenClose)?;
 
         self.consume_specific(TokenKind::Arrow)?;
@@ -213,45 +221,45 @@ impl<'source> Parser<'source> {
 
         Ok(Some(ParsedFunctionItem {
             name,
-            arguments,
+            parameters,
             return_type_name,
             body,
         }))
     }
 
-    fn parse_function_arguments(&mut self) -> BauResult<Vec<ParsedFunctionArgument>> {
-        let mut arguments = vec![];
-        self.parse_next_function_argument(&mut arguments)?;
-        Ok(arguments)
+    fn parse_function_parameters(&mut self) -> ParserResult<Vec<ParsedFunctionParameter>> {
+        let mut parameters = vec![];
+        self.parse_next_function_parameter(&mut parameters)?;
+        Ok(parameters)
     }
 
-    fn parse_next_function_argument(
+    fn parse_next_function_parameter(
         &mut self,
-        arguments: &mut Vec<ParsedFunctionArgument>,
-    ) -> BauResult<()> {
+        parameters: &mut Vec<ParsedFunctionParameter>,
+    ) -> ParserResult<()> {
         if self.peek_kind() == Ok(TokenKind::ParenClose) {
             return Ok(());
         }
 
-        if let Some(argument) = self.parse_function_argument()? {
-            arguments.push(argument);
+        if let Some(parameter) = self.parse_function_parameter()? {
+            parameters.push(parameter);
             if self.consume_if(TokenKind::Comma) {
-                self.parse_next_function_argument(arguments)?;
+                self.parse_next_function_parameter(parameters)?;
             }
         }
         Ok(())
     }
 
-    fn parse_function_argument(&mut self) -> BauResult<Option<ParsedFunctionArgument>> {
+    fn parse_function_parameter(&mut self) -> ParserResult<Option<ParsedFunctionParameter>> {
         let type_name = self.parse_type_name()?;
 
         let name_ident = self.consume_specific(TokenKind::Identifier)?;
         let name = self.text(&name_ident);
 
-        Ok(Some(ParsedFunctionArgument { name, type_name }))
+        Ok(Some(ParsedFunctionParameter { name, type_name }))
     }
 
-    fn parse_statement_list(&mut self) -> BauResult<Vec<ParsedStatement>> {
+    fn parse_statement_list(&mut self) -> ParserResult<Vec<ParsedStatement>> {
         let mut statements = vec![];
         while self.peek_kind() != Ok(TokenKind::BraceClose) {
             if let Some(statement) = self.parse_statement()? {
@@ -263,7 +271,7 @@ impl<'source> Parser<'source> {
         Ok(statements)
     }
 
-    fn parse_statement(&mut self) -> BauResult<Option<ParsedStatement>> {
+    fn parse_statement(&mut self) -> ParserResult<Option<ParsedStatement>> {
         match self.peek_kind()? {
             TokenKind::Let => self.parse_let_statement(),
             TokenKind::Return => self.parse_return_statement(),
@@ -271,7 +279,7 @@ impl<'source> Parser<'source> {
         }
     }
 
-    fn parse_let_statement(&mut self) -> BauResult<Option<ParsedStatement>> {
+    fn parse_let_statement(&mut self) -> ParserResult<Option<ParsedStatement>> {
         let start = self.peek()?.clone();
         self.consume_specific(TokenKind::Let)?;
 
@@ -284,9 +292,12 @@ impl<'source> Parser<'source> {
         let initial_value = self.parse_expression()?;
 
         if initial_value.is_none() {
-            return Err(BauError::ExpectedExpression {
-                token: self.peek()?.clone(),
-            });
+            return Err(ParserError::new(
+                ParserErrorKind::ExpectedExpression {
+                    found: self.peek_kind()?,
+                },
+                self.peek()?.range.clone(),
+            ));
         }
 
         self.consume_specific(TokenKind::Semicolon)?;
@@ -304,7 +315,7 @@ impl<'source> Parser<'source> {
         )))
     }
 
-    fn parse_return_statement(&mut self) -> BauResult<Option<ParsedStatement>> {
+    fn parse_return_statement(&mut self) -> ParserResult<Option<ParsedStatement>> {
         let start = self.peek()?.clone();
 
         self.consume_specific(TokenKind::Return)?;
@@ -320,7 +331,7 @@ impl<'source> Parser<'source> {
         )))
     }
 
-    fn parse_expression(&mut self) -> BauResult<Option<ParsedExpression>> {
+    fn parse_expression(&mut self) -> ParserResult<Option<ParsedExpression>> {
         let token = self.peek()?.clone();
         match &token.kind {
             TokenKind::IntLiteral
@@ -336,7 +347,7 @@ impl<'source> Parser<'source> {
         }
     }
 
-    fn parse_literal_expression(&mut self) -> BauResult<Option<ParsedLiteralExpression>> {
+    fn parse_literal_expression(&mut self) -> ParserResult<Option<ParsedLiteralExpression>> {
         match self.peek_kind()? {
             TokenKind::IntLiteral => {
                 let string_value = self.consume_specific(TokenKind::IntLiteral)?;
@@ -366,7 +377,7 @@ impl<'source> Parser<'source> {
         }
     }
 
-    fn parse_identifier_expression(&mut self) -> BauResult<Option<ParsedExpression>> {
+    fn parse_identifier_expression(&mut self) -> ParserResult<Option<ParsedExpression>> {
         let token = self.peek()?.clone();
         let ident = self.parse_identifier()?;
         Ok(Some(ParsedExpression::new(
@@ -375,13 +386,13 @@ impl<'source> Parser<'source> {
         )))
     }
 
-    fn parse_identifier(&mut self) -> BauResult<Identifier> {
+    fn parse_identifier(&mut self) -> ParserResult<Identifier> {
         let ident = self.consume_specific(TokenKind::Identifier)?;
         let name = self.text(&ident);
         Ok(Identifier { name, token: ident })
     }
 
-    fn parse_type_name(&mut self) -> BauResult<TypeName> {
+    fn parse_type_name(&mut self) -> ParserResult<TypeName> {
         let type_ident = self.consume_specific(TokenKind::Identifier)?;
         let name = self.text(&type_ident);
         Ok(TypeName {
@@ -390,35 +401,41 @@ impl<'source> Parser<'source> {
         })
     }
 
-    fn peek(&self) -> BauResult<&Token> {
+    fn peek(&self) -> ParserResult<&Token> {
         self.tokens
             .iter()
             .nth(self.cursor)
             .map(Ok)
-            .unwrap_or(Err(BauError::UnexpectedEndOfFile {
-                range: self
-                    .tokens
+            .unwrap_or(Err(ParserError::new(
+                ParserErrorKind::UnexpectedEndOfFile,
+                self.tokens
                     .last()
                     .cloned()
                     .expect("input should have at least one character")
                     .range,
-            }))
+            )))
     }
 
-    fn peek_kind(&self) -> BauResult<TokenKind> {
+    fn peek_kind(&self) -> ParserResult<TokenKind> {
         self.peek().map(|t| t.kind)
     }
 
-    fn consume(&mut self) -> BauResult<Token> {
+    fn consume(&mut self) -> ParserResult<Token> {
         let token = self.peek()?.clone();
         self.cursor += 1;
         Ok(token)
     }
 
-    fn consume_specific(&mut self, expected: TokenKind) -> BauResult<Token> {
+    fn consume_specific(&mut self, expected: TokenKind) -> ParserResult<Token> {
         let token = self.consume()?.clone();
         if !token.is(expected) {
-            return Err(BauError::UnexpectedToken { token, expected });
+            return Err(ParserError::new(
+                ParserErrorKind::UnexpectedToken {
+                    found: token.kind,
+                    expected,
+                },
+                token.range,
+            ));
         }
         Ok(token)
     }

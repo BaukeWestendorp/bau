@@ -1,123 +1,20 @@
 use crate::source::{CodeRange, Source};
-use crate::tokenizer::token::TokenKind;
-use crate::tokenizer::Token;
-use crate::typechecker::Type;
 
 use colored::Colorize;
 
-#[derive(Debug, Clone, PartialEq)]
-pub enum BauError {
-    UnexpectedToken {
-        token: Token,
-        expected: TokenKind,
-    },
-    UnexpectedEndOfFile {
-        range: CodeRange,
-    },
-    ExpectedItem {
-        token: Token,
-    },
-    ExpectedExpression {
-        token: Token,
-    },
-    UnknownType {
-        range: CodeRange,
-        type_name: String,
-    },
-    TypeMismatch {
-        range: CodeRange,
-        expected: Type,
-        actual: Type,
-    },
-    VariableAlreadyExists {
-        range: CodeRange,
-        name: String,
-    },
-    VariableDoesNotExist {
-        range: CodeRange,
-        name: String,
-    },
-    ReturnValueInVoidFunction {
-        range: CodeRange,
-    },
-    ExpectedReturnValue {
-        range: CodeRange,
-    },
-}
+pub fn print_error(source: &Source, range: Option<&CodeRange>, message: &str) {
+    // Show error message
+    eprintln!("{}: {}", "error".bright_red(), message);
 
-impl std::fmt::Display for BauError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let str = match self {
-            Self::UnexpectedToken {
-                token, expected, ..
-            } => {
-                format!(
-                    "Expected token `{}`, but found `{}` instead",
-                    expected, token.kind
-                )
-            }
-            Self::UnexpectedEndOfFile { .. } => {
-                format!("Expected a token, but found end of file instead")
-            }
-            Self::ExpectedItem { token, .. } => {
-                format!(
-                    "Expected an item (`fn` or `extend`), but found `{}` instead",
-                    token.kind
-                )
-            }
-            Self::ExpectedExpression { token, .. } => {
-                format!("Expected an expression, but found `{}` instead", token.kind)
-            }
-            Self::UnknownType { type_name, .. } => {
-                format!("Unknown type `{}`", type_name)
-            }
-            Self::TypeMismatch {
-                expected, actual, ..
-            } => {
-                format!(
-                    "Expected type `{}`, but found `{}` instead",
-                    expected, actual
-                )
-            }
-            Self::VariableAlreadyExists { name, .. } => {
-                format!("Variable `{}` already exists", name)
-            }
-            Self::VariableDoesNotExist { name, .. } => {
-                format!("Variable `{}` does not exist", name)
-            }
-            Self::ReturnValueInVoidFunction { .. } => {
-                format!("Cannot return a value in a void function")
-            }
-            Self::ExpectedReturnValue { .. } => {
-                format!("Expected a return value")
-            }
-        };
-
-        write!(f, "{}", str)
+    // If there is no range associated with the error, don't show the source code
+    if range.is_none() {
+        return;
     }
-}
+    let range = range.unwrap();
 
-pub type BauResult<T> = Result<T, BauError>;
-
-pub fn print_error(source: &Source, error: &BauError) {
     let max_line_number_len = source.lines().len().to_string().len();
 
-    let range = match error {
-        BauError::UnexpectedToken { token, .. } => token.range.clone(),
-        BauError::UnexpectedEndOfFile { range, .. } => range.clone(),
-        BauError::ExpectedItem { token, .. } => token.range.clone(),
-        BauError::ExpectedExpression { token, .. } => token.range.clone(),
-        BauError::UnknownType { range, .. } => range.clone(),
-        BauError::TypeMismatch { range, .. } => range.clone(),
-        BauError::VariableAlreadyExists { range, .. } => range.clone(),
-        BauError::VariableDoesNotExist { range, .. } => range.clone(),
-        BauError::ReturnValueInVoidFunction { range, .. } => range.clone(),
-        BauError::ExpectedReturnValue { range } => range.clone(),
-    };
-
-    eprintln!("{}: {}", "error".bright_red(), error.to_string());
-
-    // Multiline error
+    // Show the line(s) of code that caused the error
     let lines = source.text()[range.span.start..range.span.end].lines();
     let line_count = lines.clone().count();
     let mut cursor = 0;
@@ -151,11 +48,11 @@ pub fn print_error(source: &Source, error: &BauError) {
         cursor += line.len() + 1;
     }
 
+    // Print a underline to show where the error occurred
     let underline_length = match line_count {
         1 => range.span.len(),
         _ => lines.map(|line| line.len()).max().unwrap(),
     };
-
     print_line_gutter(max_line_number_len, None);
     eprintln!(
         "{}",
@@ -163,7 +60,7 @@ pub fn print_error(source: &Source, error: &BauError) {
             "{}{} {}",
             " ".repeat(range.coords.column),
             "^".repeat(usize::max(1, underline_length)),
-            error.to_string()
+            message,
         )
         .bright_red()
     );

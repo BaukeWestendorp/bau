@@ -2,6 +2,7 @@ use parser::Parser;
 use source::Source;
 
 pub mod error;
+pub mod interpreter;
 pub mod parser;
 pub mod source;
 pub mod tokenizer;
@@ -23,14 +24,24 @@ impl Bau {
                 let checked_items = typechecker.check_items(&items);
                 if !typechecker.errors().is_empty() {
                     for error in typechecker.errors() {
-                        error::print_error(&source, error);
+                        error.print(&source);
                     }
                     std::process::exit(1);
+                } else {
+                    let mut interpreter = interpreter::Interpreter::new();
+                    match interpreter.run(&checked_items) {
+                        Ok(value) => {
+                            eprintln!("{:?}", value);
+                        }
+                        Err(error) => {
+                            error.print(&source);
+                            std::process::exit(1);
+                        }
+                    }
                 }
-                println!("{:#?}", checked_items);
             }
             Err(error) => {
-                error::print_error(&source, &error);
+                error.print(&source);
                 std::process::exit(1);
             }
         };

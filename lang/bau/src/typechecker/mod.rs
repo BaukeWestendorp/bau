@@ -1,9 +1,15 @@
-use crate::error::BauError;
 use crate::parser::{
-    Identifier, ParsedExpression, ParsedExpressionKind, ParsedFunctionArgument, ParsedItem,
+    Identifier, ParsedExpression, ParsedExpressionKind, ParsedFunctionParameter, ParsedItem,
     ParsedItemKind, ParsedLiteralExpression, ParsedStatement, ParsedStatementKind, TypeName,
 };
+
 use crate::source::CodeRange;
+
+pub mod error;
+
+pub use error::TypecheckerError;
+
+use self::error::TypecheckerErrorKind;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum CheckedItemKind {
@@ -16,16 +22,26 @@ pub struct CheckedItem {
     range: CodeRange,
 }
 
+impl CheckedItem {
+    pub fn kind(&self) -> &CheckedItemKind {
+        &self.kind
+    }
+
+    pub fn range(&self) -> &CodeRange {
+        &self.range
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct CheckedFunctionItem {
     pub name: String,
-    pub arguments: Vec<CheckedFunctionArgument>,
+    pub parameters: Vec<CheckedFunctionParameter>,
     pub return_type: Type,
     pub body: Vec<CheckedStatement>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct CheckedFunctionArgument {
+pub struct CheckedFunctionParameter {
     pub name: String,
     pub type_: Type,
 }
@@ -61,6 +77,21 @@ impl CheckedStatement {
 #[derive(Debug, Clone, PartialEq)]
 pub enum CheckedExpression {
     Literal(CheckedLiteralExpression),
+    Variable(CheckedVariableExpression),
+}
+
+impl CheckedExpression {
+    pub fn type_(&self) -> Type {
+        match self {
+            Self::Literal(literal) => match literal {
+                CheckedLiteralExpression::Integer(_) => Type::Integer,
+                CheckedLiteralExpression::Float(_) => Type::Float,
+                CheckedLiteralExpression::String(_) => Type::String,
+                CheckedLiteralExpression::Boolean(_) => Type::Boolean,
+            },
+            Self::Variable(variable) => variable.variable.type_.clone(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -112,12 +143,12 @@ pub struct Scope {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Typechecker {
-    errors: Vec<BauError>,
+    errors: Vec<TypecheckerError>,
     scope_stack: Vec<Scope>,
 }
 
 impl Typechecker {
-    pub fn errors(&self) -> &[BauError] {
+    pub fn errors(&self) -> &[TypecheckerError] {
         &self.errors
     }
 
@@ -150,14 +181,14 @@ impl Typechecker {
 
         self.push_scope();
 
-        let arguments = self.check_function_arguments(&function.arguments);
+        let parameters = self.check_function_parameters(&function.parameters);
 
         let return_type = self.check_type(&function.return_type_name);
 
-        for argument in arguments.iter() {
+        for parameter in parameters.iter() {
             self.register_var_in_current_scope(CheckedVariable {
-                name: argument.name.clone(),
-                type_: argument.type_.clone(),
+                name: parameter.name.clone(),
+                type_: parameter.type_.clone(),
             });
         }
 
@@ -169,38 +200,40 @@ impl Typechecker {
         });
 
         if return_type == Type::Void && return_statement.is_some() {
-            self.errors.push(BauError::ReturnValueInVoidFunction {
-                range: return_statement.unwrap().range().clone(),
-            });
+            self.errors.push(TypecheckerError::new(
+                TypecheckerErrorKind::ReturnValueInVoidFunction,
+                return_statement.unwrap().range().clone(),
+            ));
         } else if return_type != Type::Void && return_statement.is_none() {
-            self.errors.push(BauError::ExpectedReturnValue {
-                range: function_item.range().clone(),
-            });
+            self.errors.push(TypecheckerError::new(
+                TypecheckerErrorKind::ExpectedReturnValue,
+                function_item.range().clone(),
+            ));
         }
 
         self.pop_scope();
 
         CheckedFunctionItem {
             name: function.name.clone(),
-            arguments,
+            parameters,
             return_type,
             body,
         }
     }
 
-    fn check_function_arguments(
+    fn check_function_parameters(
         &mut self,
-        arguments: &[ParsedFunctionArgument],
-    ) -> Vec<CheckedFunctionArgument> {
-        let mut checked_arguments = vec![];
-        for argument in arguments.iter() {
-            let type_ = self.check_type(&argument.type_name);
-            checked_arguments.push(CheckedFunctionArgument {
-                name: argument.name.clone(),
+        parameters: &[ParsedFunctionParameter],
+    ) -> Vec<CheckedFunctionParameter> {
+        let mut checked_parameters = vec![];
+        for parameter in parameters.iter() {
+            let type_ = self.check_type(&parameter.type_name);
+            checked_parameters.push(CheckedFunctionParameter {
+                name: parameter.name.clone(),
                 type_,
             });
         }
-        checked_arguments
+        checked_parameters
     }
 
     fn check_function_body(
@@ -237,22 +270,25 @@ impl Typechecker {
                 initial_value,
             } => {
                 if self.variable_exists(name.name()) {
-                    self.errors.push(BauError::VariableAlreadyExists {
-                        range: name.token().range.clone(),
-                        name: name.name().to_string(),
-                    });
+                    self.errors.push(TypecheckerError::new(
+                        TypecheckerErrorKind::VariableAlreadyExists {
+                            name: name.name().to_string(),
+                        },
+                        name.token().range.clone(),
+                    ));
                 }
 
                 let type_ = self.check_type(type_name);
-                let (checked_initial_value, initial_value_type) =
-                    self.check_expression(initial_value);
+                let checked_initial_value = self.check_expression(initial_value);
 
-                if type_ != initial_value_type {
-                    self.errors.push(BauError::TypeMismatch {
-                        range: type_name.token().range.clone(),
-                        expected: type_.clone(),
-                        actual: initial_value_type,
-                    });
+                if type_ != checked_initial_value.type_() {
+                    self.errors.push(TypecheckerError::new(
+                        TypecheckerErrorKind::TypeMismatch {
+                            expected: type_.clone(),
+                            actual: checked_initial_value.type_(),
+                        },
+                        type_name.token().range.clone(),
+                    ));
                 }
 
                 self.register_var_in_current_scope(CheckedVariable {
@@ -281,17 +317,19 @@ impl Typechecker {
         match statement.kind() {
             ParsedStatementKind::Return { value } => {
                 if parent_function_return_type == &Type::Void && value.is_some() {
-                    self.errors.push(BauError::ReturnValueInVoidFunction {
-                        range: statement.range().clone(),
-                    });
+                    self.errors.push(TypecheckerError::new(
+                        TypecheckerErrorKind::ReturnValueInVoidFunction,
+                        statement.range().clone(),
+                    ));
                     return CheckedStatement {
                         kind: CheckedStatementKind::Return { value: None },
                         range: statement.range().clone(),
                     };
                 } else if parent_function_return_type != &Type::Void && value.is_none() {
-                    self.errors.push(BauError::ExpectedReturnValue {
-                        range: statement.range().clone(),
-                    });
+                    self.errors.push(TypecheckerError::new(
+                        TypecheckerErrorKind::ExpectedReturnValue,
+                        statement.range().clone(),
+                    ));
                     return CheckedStatement {
                         kind: CheckedStatementKind::Return { value: None },
                         range: statement.range().clone(),
@@ -303,14 +341,16 @@ impl Typechecker {
                     };
                 } else {
                     let value = value.clone().unwrap();
-                    let (checked_value, value_type) = self.check_expression(&value);
+                    let checked_value = self.check_expression(&value);
 
-                    if parent_function_return_type != &value_type {
-                        self.errors.push(BauError::TypeMismatch {
-                            range: value.token().range.clone(),
-                            expected: parent_function_return_type.clone(),
-                            actual: value_type,
-                        });
+                    if parent_function_return_type != &checked_value.type_() {
+                        self.errors.push(TypecheckerError::new(
+                            TypecheckerErrorKind::TypeMismatch {
+                                expected: parent_function_return_type.clone(),
+                                actual: checked_value.type_(),
+                            },
+                            value.token().range.clone(),
+                        ));
                     }
 
                     return CheckedStatement {
@@ -325,21 +365,24 @@ impl Typechecker {
         }
     }
 
-    fn check_expression(&mut self, expression: &ParsedExpression) -> (CheckedExpression, Type) {
+    fn check_expression(&mut self, expression: &ParsedExpression) -> CheckedExpression {
         match expression.kind() {
             ParsedExpressionKind::Literal(literal) => {
                 let checked_literal = self.check_literal_expression(literal);
-                (
-                    CheckedExpression::Literal(checked_literal.0),
-                    checked_literal.1,
-                )
+                CheckedExpression::Literal(checked_literal)
             }
             ParsedExpressionKind::Variable(ident) => {
+                if !self.variable_exists(ident.name()) {
+                    self.errors.push(TypecheckerError::new(
+                        TypecheckerErrorKind::VariableDoesNotExist {
+                            name: ident.name().to_string(),
+                        },
+                        ident.token().range.clone(),
+                    ));
+                }
+
                 let checked_variable = self.check_variable_expression(ident);
-                (
-                    CheckedExpression::Literal(CheckedLiteralExpression::Integer(0)),
-                    checked_variable.variable.type_.clone(),
-                )
+                CheckedExpression::Variable(checked_variable)
             }
         }
     }
@@ -347,21 +390,14 @@ impl Typechecker {
     fn check_literal_expression(
         &mut self,
         expression: &ParsedLiteralExpression,
-    ) -> (CheckedLiteralExpression, Type) {
+    ) -> CheckedLiteralExpression {
         match expression {
-            ParsedLiteralExpression::Integer(value) => {
-                (CheckedLiteralExpression::Integer(*value), Type::Integer)
+            ParsedLiteralExpression::Integer(value) => CheckedLiteralExpression::Integer(*value),
+            ParsedLiteralExpression::Float(value) => CheckedLiteralExpression::Float(*value),
+            ParsedLiteralExpression::String(value) => {
+                CheckedLiteralExpression::String(value.clone())
             }
-            ParsedLiteralExpression::Float(value) => {
-                (CheckedLiteralExpression::Float(*value), Type::Float)
-            }
-            ParsedLiteralExpression::String(value) => (
-                CheckedLiteralExpression::String(value.clone()),
-                Type::String,
-            ),
-            ParsedLiteralExpression::Boolean(value) => {
-                (CheckedLiteralExpression::Boolean(*value), Type::Boolean)
-            }
+            ParsedLiteralExpression::Boolean(value) => CheckedLiteralExpression::Boolean(*value),
         }
     }
 
@@ -370,9 +406,9 @@ impl Typechecker {
         if let Some(variable) = variable {
             CheckedVariableExpression { variable }
         } else {
-            self.errors.push(BauError::VariableDoesNotExist {
-                range: ident.token().range.clone(),
+            self.register_var_in_current_scope(CheckedVariable {
                 name: ident.name().to_string(),
+                type_: Type::Void,
             });
             CheckedVariableExpression {
                 variable: CheckedVariable {
@@ -391,10 +427,12 @@ impl Typechecker {
             "string" => Type::String,
             "bool" => Type::Boolean,
             _ => {
-                self.errors.push(BauError::UnknownType {
-                    range: type_name.token().range.clone(),
-                    type_name: type_name.name().to_string(),
-                });
+                self.errors.push(TypecheckerError::new(
+                    TypecheckerErrorKind::UnknownType {
+                        type_name: type_name.name().to_string(),
+                    },
+                    type_name.token().range.clone(),
+                ));
                 Type::Void
             }
         }

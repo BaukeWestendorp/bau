@@ -9,7 +9,7 @@ pub mod error;
 
 pub use error::TypecheckerError;
 
-use self::error::TypecheckerErrorKind;
+use self::error::{TypecheckerErrorKind, TypecheckerResult};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum CheckedItemKind {
@@ -159,8 +159,15 @@ impl Typechecker {
         for item in items.iter() {
             match item.kind() {
                 ParsedItemKind::Function(_) => {
+                    let function = match self.check_function_item(item) {
+                        Ok(function) => function,
+                        Err(error) => {
+                            self.errors.push(error);
+                            continue;
+                        }
+                    };
                     checked_items.push(CheckedItem {
-                        kind: CheckedItemKind::Function(self.check_function_item(item)),
+                        kind: CheckedItemKind::Function(function),
                         range: item.range().clone(),
                     });
                 }
@@ -169,16 +176,19 @@ impl Typechecker {
         checked_items
     }
 
-    fn check_function_item(&mut self, function_item: &ParsedItem) -> CheckedFunctionItem {
+    fn check_function_item(
+        &mut self,
+        function_item: &ParsedItem,
+    ) -> TypecheckerResult<CheckedFunctionItem> {
         let function = match function_item.kind() {
             ParsedItemKind::Function(function) => function,
         };
 
         self.push_scope();
 
-        let parameters = self.check_function_parameters(&function.parameters);
+        let parameters = self.check_function_parameters(&function.parameters)?;
 
-        let return_type = self.check_type(&function.return_type_name);
+        let return_type = self.check_type(&function.return_type_name)?;
 
         for parameter in parameters.iter() {
             self.register_var_in_current_scope(CheckedVariable {
@@ -187,7 +197,7 @@ impl Typechecker {
             });
         }
 
-        let body = self.check_function_body(&function.body, &return_type);
+        let body = self.check_function_body(&function.body, &return_type)?;
 
         let return_statement = body.iter().find(|statement| match statement.kind() {
             CheckedStatementKind::Return { .. } => true,
@@ -195,12 +205,14 @@ impl Typechecker {
         });
 
         if return_type == Type::Void && return_statement.is_some() {
-            self.errors.push(TypecheckerError::new(
+            self.pop_scope();
+            return Err(TypecheckerError::new(
                 TypecheckerErrorKind::ReturnValueInVoidFunction,
                 return_statement.unwrap().range().clone(),
             ));
         } else if return_type != Type::Void && return_statement.is_none() {
-            self.errors.push(TypecheckerError::new(
+            self.pop_scope();
+            return Err(TypecheckerError::new(
                 TypecheckerErrorKind::ExpectedReturnValue,
                 function_item.range().clone(),
             ));
@@ -208,47 +220,47 @@ impl Typechecker {
 
         self.pop_scope();
 
-        CheckedFunctionItem {
+        Ok(CheckedFunctionItem {
             name: function.name.clone(),
             parameters,
             return_type,
             body,
-        }
+        })
     }
 
     fn check_function_parameters(
         &mut self,
         parameters: &[ParsedFunctionParameter],
-    ) -> Vec<CheckedFunctionParameter> {
+    ) -> TypecheckerResult<Vec<CheckedFunctionParameter>> {
         let mut checked_parameters = vec![];
         for parameter in parameters.iter() {
-            let type_ = self.check_type(&parameter.type_name);
+            let type_ = self.check_type(&parameter.type_name)?;
             checked_parameters.push(CheckedFunctionParameter {
                 name: parameter.name.clone(),
                 type_,
             });
         }
-        checked_parameters
+        Ok(checked_parameters)
     }
 
     fn check_function_body(
         &mut self,
         body: &[ParsedStatement],
         parent_function_return_type: &Type,
-    ) -> Vec<CheckedStatement> {
+    ) -> TypecheckerResult<Vec<CheckedStatement>> {
         let mut checked_body = vec![];
         for statement in body.iter() {
-            let checked_statement = self.check_statement(statement, parent_function_return_type);
+            let checked_statement = self.check_statement(statement, parent_function_return_type)?;
             checked_body.push(checked_statement);
         }
-        checked_body
+        Ok(checked_body)
     }
 
     fn check_statement(
         &mut self,
         statement: &ParsedStatement,
         parent_function_return_type: &Type,
-    ) -> CheckedStatement {
+    ) -> TypecheckerResult<CheckedStatement> {
         match statement.kind() {
             ParsedStatementKind::Let { .. } => self.check_let_statement(statement),
             ParsedStatementKind::Return { .. } => {
@@ -257,7 +269,10 @@ impl Typechecker {
         }
     }
 
-    fn check_let_statement(&mut self, statement: &ParsedStatement) -> CheckedStatement {
+    fn check_let_statement(
+        &mut self,
+        statement: &ParsedStatement,
+    ) -> TypecheckerResult<CheckedStatement> {
         match statement.kind() {
             ParsedStatementKind::Let {
                 name,
@@ -265,7 +280,7 @@ impl Typechecker {
                 initial_value,
             } => {
                 if self.variable_exists(name.name()) {
-                    self.errors.push(TypecheckerError::new(
+                    return Err(TypecheckerError::new(
                         TypecheckerErrorKind::VariableAlreadyExists {
                             name: name.name().to_string(),
                         },
@@ -273,11 +288,11 @@ impl Typechecker {
                     ));
                 }
 
-                let type_ = self.check_type(type_name);
-                let checked_initial_value = self.check_expression(initial_value);
+                let type_ = self.check_type(type_name)?;
+                let checked_initial_value = self.check_expression(initial_value)?;
 
                 if type_ != checked_initial_value.type_() {
-                    self.errors.push(TypecheckerError::new(
+                    return Err(TypecheckerError::new(
                         TypecheckerErrorKind::TypeMismatch {
                             expected: type_.clone(),
                             actual: checked_initial_value.type_(),
@@ -291,14 +306,14 @@ impl Typechecker {
                     type_: type_.clone(),
                 });
 
-                CheckedStatement {
+                Ok(CheckedStatement {
                     kind: CheckedStatementKind::Let {
                         name: name.name().to_string(),
                         type_,
                         initial_value: checked_initial_value,
                     },
                     range: statement.range().clone(),
-                }
+                })
             }
             _ => panic!("Expected let statement"),
         }
@@ -308,38 +323,30 @@ impl Typechecker {
         &mut self,
         statement: &ParsedStatement,
         parent_function_return_type: &Type,
-    ) -> CheckedStatement {
+    ) -> TypecheckerResult<CheckedStatement> {
         match statement.kind() {
             ParsedStatementKind::Return { value } => {
                 if parent_function_return_type == &Type::Void && value.is_some() {
-                    self.errors.push(TypecheckerError::new(
+                    Err(TypecheckerError::new(
                         TypecheckerErrorKind::ReturnValueInVoidFunction,
                         statement.range().clone(),
-                    ));
-                    return CheckedStatement {
-                        kind: CheckedStatementKind::Return { value: None },
-                        range: statement.range().clone(),
-                    };
+                    ))
                 } else if parent_function_return_type != &Type::Void && value.is_none() {
-                    self.errors.push(TypecheckerError::new(
+                    Err(TypecheckerError::new(
                         TypecheckerErrorKind::ExpectedReturnValue,
                         statement.range().clone(),
-                    ));
-                    return CheckedStatement {
-                        kind: CheckedStatementKind::Return { value: None },
-                        range: statement.range().clone(),
-                    };
+                    ))
                 } else if parent_function_return_type == &Type::Void && value.is_none() {
-                    return CheckedStatement {
+                    Ok(CheckedStatement {
                         kind: CheckedStatementKind::Return { value: None },
                         range: statement.range().clone(),
-                    };
+                    })
                 } else {
                     let value = value.clone().unwrap();
-                    let checked_value = self.check_expression(&value);
+                    let checked_value = self.check_expression(&value)?;
 
                     if parent_function_return_type != &checked_value.type_() {
-                        self.errors.push(TypecheckerError::new(
+                        return Err(TypecheckerError::new(
                             TypecheckerErrorKind::TypeMismatch {
                                 expected: parent_function_return_type.clone(),
                                 actual: checked_value.type_(),
@@ -348,27 +355,30 @@ impl Typechecker {
                         ));
                     }
 
-                    return CheckedStatement {
+                    Ok(CheckedStatement {
                         kind: CheckedStatementKind::Return {
                             value: Some(checked_value),
                         },
                         range: statement.range().clone(),
-                    };
+                    })
                 }
             }
             _ => panic!("Expected return statement"),
         }
     }
 
-    fn check_expression(&mut self, expression: &ParsedExpression) -> CheckedExpression {
+    fn check_expression(
+        &mut self,
+        expression: &ParsedExpression,
+    ) -> TypecheckerResult<CheckedExpression> {
         match expression.kind() {
             ParsedExpressionKind::Literal(literal) => {
                 let checked_literal = self.check_literal_expression(literal);
-                CheckedExpression::Literal(checked_literal)
+                Ok(CheckedExpression::Literal(checked_literal))
             }
             ParsedExpressionKind::Variable(ident) => {
                 if !self.variable_exists(ident.name()) {
-                    self.errors.push(TypecheckerError::new(
+                    return Err(TypecheckerError::new(
                         TypecheckerErrorKind::VariableDoesNotExist {
                             name: ident.name().to_string(),
                         },
@@ -376,8 +386,8 @@ impl Typechecker {
                     ));
                 }
 
-                let checked_variable = self.check_variable_expression(ident);
-                CheckedExpression::Variable(checked_variable)
+                let checked_variable = self.check_variable_expression(ident)?;
+                Ok(CheckedExpression::Variable(checked_variable))
             }
         }
     }
@@ -396,38 +406,36 @@ impl Typechecker {
         }
     }
 
-    fn check_variable_expression(&mut self, ident: &Identifier) -> CheckedVariable {
+    fn check_variable_expression(
+        &mut self,
+        ident: &Identifier,
+    ) -> TypecheckerResult<CheckedVariable> {
         let variable = self.get_variable_by_name(ident.name());
         if let Some(variable) = variable {
-            variable
+            Ok(variable)
         } else {
-            self.register_var_in_current_scope(CheckedVariable {
-                name: ident.name().to_string(),
-                type_: Type::Void,
-            });
-            CheckedVariable {
-                name: ident.name().to_string(),
-                type_: Type::Void,
-            }
+            Err(TypecheckerError::new(
+                TypecheckerErrorKind::VariableDoesNotExist {
+                    name: ident.name().to_string(),
+                },
+                ident.token().range.clone(),
+            ))
         }
     }
 
-    fn check_type(&mut self, type_name: &TypeName) -> Type {
+    fn check_type(&mut self, type_name: &TypeName) -> TypecheckerResult<Type> {
         match type_name.name() {
-            "void" => Type::Void,
-            "int" => Type::Integer,
-            "float" => Type::Float,
-            "string" => Type::String,
-            "bool" => Type::Boolean,
-            _ => {
-                self.errors.push(TypecheckerError::new(
-                    TypecheckerErrorKind::UnknownType {
-                        type_name: type_name.name().to_string(),
-                    },
-                    type_name.token().range.clone(),
-                ));
-                Type::Void
-            }
+            "void" => Ok(Type::Void),
+            "int" => Ok(Type::Integer),
+            "float" => Ok(Type::Float),
+            "string" => Ok(Type::String),
+            "bool" => Ok(Type::Boolean),
+            _ => Err(TypecheckerError::new(
+                TypecheckerErrorKind::UnknownType {
+                    type_name: type_name.name().to_string(),
+                },
+                type_name.token().range.clone(),
+            )),
         }
     }
 

@@ -60,3 +60,5 @@ impl std::fmt::Display for TypecheckerError {
         write!(f, "{}", str)
     }
 }
+
+pub type TypecheckerResult<T> = Result<T, TypecheckerError>;

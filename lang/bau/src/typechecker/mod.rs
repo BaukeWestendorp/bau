@@ -77,7 +77,7 @@ impl CheckedStatement {
 #[derive(Debug, Clone, PartialEq)]
 pub enum CheckedExpression {
     Literal(CheckedLiteralExpression),
-    Variable(CheckedVariableExpression),
+    Variable(CheckedVariable),
 }
 
 impl CheckedExpression {
@@ -89,7 +89,7 @@ impl CheckedExpression {
                 CheckedLiteralExpression::String(_) => Type::String,
                 CheckedLiteralExpression::Boolean(_) => Type::Boolean,
             },
-            Self::Variable(variable) => variable.variable.type_.clone(),
+            Self::Variable(variable) => variable.type_.clone(),
         }
     }
 }
@@ -100,11 +100,6 @@ pub enum CheckedLiteralExpression {
     Float(f64),
     String(String),
     Boolean(bool),
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct CheckedVariableExpression {
-    pub variable: CheckedVariable,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -401,20 +396,18 @@ impl Typechecker {
         }
     }
 
-    fn check_variable_expression(&mut self, ident: &Identifier) -> CheckedVariableExpression {
+    fn check_variable_expression(&mut self, ident: &Identifier) -> CheckedVariable {
         let variable = self.get_variable_by_name(ident.name());
         if let Some(variable) = variable {
-            CheckedVariableExpression { variable }
+            variable
         } else {
             self.register_var_in_current_scope(CheckedVariable {
                 name: ident.name().to_string(),
                 type_: Type::Void,
             });
-            CheckedVariableExpression {
-                variable: CheckedVariable {
-                    name: ident.name().to_string(),
-                    type_: Type::Void,
-                },
+            CheckedVariable {
+                name: ident.name().to_string(),
+                type_: Type::Void,
             }
         }
     }

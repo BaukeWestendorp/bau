@@ -181,7 +181,7 @@ impl Interpreter {
             CheckedExpression::Variable(variable) => {
                 let value = self
                     .current_scope_mut()
-                    .get_variable_by_name(&variable.variable.name)?;
+                    .get_variable_by_name(&variable.name)?;
                 Ok(Some(value.clone()))
             }
         }

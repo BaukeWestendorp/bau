@@ -68,7 +68,7 @@ impl Scope {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-enum ControlFlowMode {
+pub enum ControlFlowMode {
     Return(Option<Value>),
 }
 
@@ -76,7 +76,6 @@ enum ControlFlowMode {
 pub struct Interpreter {
     functions: HashMap<String, CheckedFunctionItem>,
     scope_stack: Vec<Scope>,
-    control_flow_mode: Option<ControlFlowMode>,
 }
 
 impl Interpreter {
@@ -84,7 +83,6 @@ impl Interpreter {
         Self {
             functions: HashMap::new(),
             scope_stack: vec![],
-            control_flow_mode: None,
         }
     }
 
@@ -134,31 +132,31 @@ impl Interpreter {
             }
         }
 
-        for statement in &function.body {
-            self.evaluate_statement(statement)?;
-
-            if let Some(ControlFlowMode::Return(return_value)) = self.control_flow_mode.take() {
-                self.control_flow_mode = None;
+        match self.evaluate_block(&function.body)? {
+            Some(ControlFlowMode::Return(return_value)) => {
                 self.pop_scope();
-                return Ok(return_value);
+                Ok(return_value)
+            }
+            None => {
+                self.pop_scope();
+                Ok(None)
             }
         }
-
-        self.pop_scope();
-        Ok(None)
     }
 
-    pub fn evaluate_statement(&mut self, statement: &CheckedStatement) -> ExecutionResult<()> {
+    pub fn evaluate_statement(
+        &mut self,
+        statement: &CheckedStatement,
+    ) -> ExecutionResult<Option<ControlFlowMode>> {
         match statement.kind() {
             CheckedStatementKind::Return { value } => {
-                self.control_flow_mode = match value {
+                return match value {
                     Some(value_expression) => {
                         let return_value = self.evaluate_expression(value_expression)?;
-                        Some(ControlFlowMode::Return(return_value))
+                        Ok(Some(ControlFlowMode::Return(return_value)))
                     }
-                    None => Some(ControlFlowMode::Return(None)),
+                    None => Ok(Some(ControlFlowMode::Return(None))),
                 };
-                Ok(())
             }
             CheckedStatementKind::Let {
                 name,
@@ -177,14 +175,32 @@ impl Interpreter {
                 };
 
                 self.current_scope_mut().declare_variable(name, value)?;
-
-                Ok(())
             }
             CheckedStatementKind::Expression { expression } => {
                 self.evaluate_expression(expression)?;
-                Ok(())
+            }
+            CheckedStatementKind::Loop { block } => loop {
+                self.push_scope();
+                if let Some(mode) = self.evaluate_block(block)? {
+                    self.pop_scope();
+                    return Ok(Some(mode));
+                }
+                self.pop_scope();
+            },
+        };
+        Ok(None)
+    }
+
+    pub fn evaluate_block(
+        &mut self,
+        block: &[CheckedStatement],
+    ) -> ExecutionResult<Option<ControlFlowMode>> {
+        for statement in block {
+            if let Some(control_flow_mode) = self.evaluate_statement(statement)? {
+                return Ok(Some(control_flow_mode));
             }
         }
+        Ok(None)
     }
 
     pub fn evaluate_expression(

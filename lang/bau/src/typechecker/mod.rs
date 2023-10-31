@@ -61,6 +61,9 @@ pub enum CheckedStatementKind {
     Expression {
         expression: CheckedExpression,
     },
+    Loop {
+        block: Vec<CheckedStatement>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -313,12 +316,21 @@ impl Typechecker {
         body: &[ParsedStatement],
         parent_function_return_type: &Type,
     ) -> TypecheckerResult<Vec<CheckedStatement>> {
-        let mut checked_body = vec![];
-        for statement in body.iter() {
-            let checked_statement = self.check_statement(statement, parent_function_return_type)?;
-            checked_body.push(checked_statement);
-        }
+        let checked_body = self.check_block(body, parent_function_return_type)?;
         Ok(checked_body)
+    }
+
+    fn check_block(
+        &mut self,
+        block: &[ParsedStatement],
+        parent_function_return_type: &Type,
+    ) -> TypecheckerResult<Vec<CheckedStatement>> {
+        let mut checked_block = vec![];
+        for statement in block.iter() {
+            let checked_statement = self.check_statement(statement, parent_function_return_type)?;
+            checked_block.push(checked_statement);
+        }
+        Ok(checked_block)
     }
 
     fn check_statement(
@@ -332,6 +344,9 @@ impl Typechecker {
                 self.check_return_statement(statement, parent_function_return_type)
             }
             ParsedStatementKind::Expression { .. } => self.check_expression_statement(statement),
+            ParsedStatementKind::Loop { .. } => {
+                self.check_loop_statement(statement, parent_function_return_type)
+            }
         }
     }
 
@@ -439,7 +454,7 @@ impl Typechecker {
     ) -> TypecheckerResult<CheckedStatement> {
         match statement.kind() {
             ParsedStatementKind::Expression { expression } => {
-                let checked_expression = self.check_expression(&expression)?;
+                let checked_expression = self.check_expression(expression)?;
                 Ok(CheckedStatement {
                     kind: CheckedStatementKind::Expression {
                         expression: checked_expression,
@@ -448,6 +463,28 @@ impl Typechecker {
                 })
             }
             _ => panic!("Expected expression statement"),
+        }
+    }
+
+    fn check_loop_statement(
+        &mut self,
+        statement: &ParsedStatement,
+        parent_function_return_type: &Type,
+    ) -> TypecheckerResult<CheckedStatement> {
+        match statement.kind() {
+            ParsedStatementKind::Loop { body } => {
+                self.push_scope();
+                let checked_body = self.check_block(body, parent_function_return_type)?;
+                self.pop_scope();
+
+                Ok(CheckedStatement {
+                    kind: CheckedStatementKind::Loop {
+                        block: checked_body,
+                    },
+                    range: *statement.range(),
+                })
+            }
+            _ => panic!("Expected loop statement"),
         }
     }
 

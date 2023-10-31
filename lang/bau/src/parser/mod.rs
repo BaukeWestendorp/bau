@@ -83,6 +83,9 @@ pub enum ParsedStatementKind {
     Expression {
         expression: ParsedExpression,
     },
+    Loop {
+        body: Vec<ParsedStatement>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -314,6 +317,7 @@ impl<'source> Parser<'source> {
         match self.peek_kind()? {
             TokenKind::Let => self.parse_let_statement(),
             TokenKind::Return => self.parse_return_statement(),
+            TokenKind::Loop => self.parse_loop_statement(),
             _ => self.parse_expression_statement(),
         }
     }
@@ -353,16 +357,35 @@ impl<'source> Parser<'source> {
 
     fn parse_return_statement(&mut self) -> ParserResult<Option<ParsedStatement>> {
         let start = self.current_token_range()?;
-
         self.consume_specific(TokenKind::Return)?;
+
+        let mut end = self.current_token_range()?;
+        if self.consume_if(TokenKind::Semicolon) {
+            return Ok(Some(ParsedStatement::new(
+                ParsedStatementKind::Return { value: None },
+                CodeRange::from_ranges(start, end),
+            )));
+        }
+
         let expr = self.parse_expression()?;
-        let end = self.current_token_range()?;
-
+        end = self.current_token_range()?;
         self.consume_specific(TokenKind::Semicolon)?;
-
         Ok(Some(ParsedStatement::new(
             ParsedStatementKind::Return { value: expr },
             CodeRange::from_ranges(start, end),
+        )))
+    }
+
+    fn parse_loop_statement(&mut self) -> ParserResult<Option<ParsedStatement>> {
+        let start = self.current_token_range();
+        self.consume_specific(TokenKind::Loop)?;
+        self.consume_specific(TokenKind::BraceOpen)?;
+        let body = self.parse_statement_list()?;
+        self.consume_specific(TokenKind::BraceClose)?;
+        let end = self.current_token_range()?;
+        Ok(Some(ParsedStatement::new(
+            ParsedStatementKind::Loop { body },
+            CodeRange::from_ranges(start?, end),
         )))
     }
 

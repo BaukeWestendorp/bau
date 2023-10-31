@@ -100,10 +100,17 @@ fn bau_token_to_semantic_token_type(bau_token_kind: TokenKind) -> Option<u32> {
         TokenKind::Minus => Some(2),
         TokenKind::Asterisk => Some(2),
         TokenKind::Slash => Some(2),
+        TokenKind::Percent => Some(2),
         TokenKind::ExclamationMark => Some(2),
         TokenKind::LessThan => Some(2),
         TokenKind::GreaterThan => Some(2),
-        TokenKind::Percent => Some(2),
+
+        // Compound operators
+        TokenKind::PlusEquals => Some(2),
+        TokenKind::MinusEquals => Some(2),
+        TokenKind::AsteriskEquals => Some(2),
+        TokenKind::SlashEquals => Some(2),
+        TokenKind::PercentEquals => Some(2),
 
         TokenKind::EqualsEquals => Some(2),
         TokenKind::ExclamationMarkEquals => Some(2),

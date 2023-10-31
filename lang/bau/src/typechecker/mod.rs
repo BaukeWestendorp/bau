@@ -58,6 +58,7 @@ pub enum CheckedStatementKind {
     VariableAssignment {
         name: String,
         value: CheckedExpression,
+        operator: TokenKind,
     },
     Return {
         value: Option<CheckedExpression>,
@@ -557,7 +558,11 @@ impl Typechecker {
         statement: &ParsedStatement,
     ) -> TypecheckerResult<CheckedStatement> {
         match statement.kind() {
-            ParsedStatementKind::VariableAssignment { name, value } => {
+            ParsedStatementKind::VariableAssignment {
+                name,
+                value,
+                operator,
+            } => {
                 if !self.variable_exists(name.name()) {
                     return Err(TypecheckerError::new(
                         TypecheckerErrorKind::VariableNotDefined {
@@ -584,6 +589,7 @@ impl Typechecker {
                     kind: CheckedStatementKind::VariableAssignment {
                         name: name.name().to_string(),
                         value: checked_value,
+                        operator: *operator,
                     },
                     range: *statement.range(),
                 })

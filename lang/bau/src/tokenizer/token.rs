@@ -27,10 +27,17 @@ pub enum TokenKind {
     Minus,
     Asterisk,
     Slash,
+    Percent,
     ExclamationMark,
     LessThan,
     GreaterThan,
-    Percent,
+
+    // Compound operators
+    PlusEquals,
+    MinusEquals,
+    AsteriskEquals,
+    SlashEquals,
+    PercentEquals,
 
     EqualsEquals,
     ExclamationMarkEquals,
@@ -88,6 +95,12 @@ impl std::fmt::Display for TokenKind {
             Self::LessThan => "<".to_string(),
             Self::GreaterThan => ">".to_string(),
             Self::Percent => "%".to_string(),
+
+            Self::PlusEquals => "+=".to_string(),
+            Self::MinusEquals => "-=".to_string(),
+            Self::AsteriskEquals => "*=".to_string(),
+            Self::SlashEquals => "/=".to_string(),
+            Self::PercentEquals => "%=".to_string(),
 
             Self::EqualsEquals => "==".to_string(),
             Self::ExclamationMarkEquals => "!=".to_string(),

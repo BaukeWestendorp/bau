@@ -80,6 +80,7 @@ pub enum ParsedStatementKind {
     VariableAssignment {
         name: Identifier,
         value: ParsedExpression,
+        operator: TokenKind,
     },
     Return {
         value: Option<ParsedExpression>,
@@ -328,9 +329,15 @@ impl<'source> Parser<'source> {
             TokenKind::Return => self.parse_return_statement(),
             TokenKind::If => self.parse_if_statement(),
             TokenKind::Loop => self.parse_loop_statement(),
-            TokenKind::Identifier if self.peek_kind_at(1)? == TokenKind::Equals => {
-                self.parse_variable_assignment_statement()
-            }
+            TokenKind::Identifier => match self.peek_kind_at(1)? {
+                TokenKind::Equals
+                | TokenKind::PlusEquals
+                | TokenKind::MinusEquals
+                | TokenKind::AsteriskEquals
+                | TokenKind::SlashEquals
+                | TokenKind::PercentEquals => self.parse_variable_assignment_statement(),
+                _ => self.parse_expression_statement(),
+            },
             _ => self.parse_expression_statement(),
         }
     }
@@ -432,12 +439,14 @@ impl<'source> Parser<'source> {
     fn parse_variable_assignment_statement(&mut self) -> ParserResult<Option<ParsedStatement>> {
         let start = self.current_token_range()?;
         let name = self.parse_identifier()?;
-        self.consume_specific(TokenKind::Equals)?;
+        let op = self.consume()?;
         let value = self.parse_expression()?;
         let end = self.current_token_range()?;
         self.consume_specific(TokenKind::Semicolon)?;
+
         Ok(Some(ParsedStatement::new(
             ParsedStatementKind::VariableAssignment {
+                operator: op.kind(),
                 name,
                 value: value.unwrap(),
             },

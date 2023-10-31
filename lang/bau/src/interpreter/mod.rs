@@ -176,9 +176,11 @@ impl Interpreter {
 
                 self.current_scope_mut().declare_variable(name, value)?;
             }
-            CheckedStatementKind::VariableAssignment { name, value } => {
-                self.evaluate_variable_assignment(name, value)?
-            }
+            CheckedStatementKind::VariableAssignment {
+                name,
+                value,
+                operator,
+            } => self.evaluate_variable_assignment(name, value, operator)?,
             CheckedStatementKind::Expression { expression } => {
                 self.evaluate_expression(expression)?;
             }
@@ -215,6 +217,7 @@ impl Interpreter {
         &mut self,
         name: &str,
         value: &CheckedExpression,
+        operator: &TokenKind,
     ) -> ExecutionResult<()> {
         let value = match self.evaluate_expression(value)? {
             Some(value) => value,
@@ -227,7 +230,18 @@ impl Interpreter {
             }
         };
 
-        self.set_variable(name, value)
+        let mut new_value = self.get_variable(name)?.clone();
+        match operator {
+            TokenKind::Equals => new_value = value,
+            TokenKind::PlusEquals => new_value.add(value)?,
+            TokenKind::MinusEquals => new_value.subtract(value)?,
+            TokenKind::AsteriskEquals => new_value.multiply(value)?,
+            TokenKind::SlashEquals => new_value.divide(value)?,
+            TokenKind::PercentEquals => new_value.modulo(value)?,
+            _ => panic!("Invalid compound assignment operator: {:?}", operator),
+        };
+
+        self.set_variable(name, new_value)
     }
 
     pub fn evaluate_expression(
@@ -331,93 +345,26 @@ impl Interpreter {
         if lhs.is_none() || rhs.is_none() {
             return Err(ExecutionError::new(ExecutionErrorKind::InfixWithVoidSide));
         }
-        let lhs = lhs.unwrap();
+        let mut value = lhs.unwrap();
         let rhs = rhs.unwrap();
 
         match operator {
-            TokenKind::Plus => match (lhs, rhs) {
-                (Value::Integer(lhs), Value::Integer(rhs)) => Ok(Value::Integer(lhs + rhs)),
-                (Value::Float(lhs), Value::Float(rhs)) => Ok(Value::Float(lhs + rhs)),
-                (Value::String(lhs), Value::String(rhs)) => Ok(Value::String(lhs + &rhs)),
-                _ => Err(ExecutionError::new(
-                    ExecutionErrorKind::InfixWithInvalidTypes,
-                )),
-            },
-            TokenKind::Minus => match (lhs, rhs) {
-                (Value::Integer(lhs), Value::Integer(rhs)) => Ok(Value::Integer(lhs - rhs)),
-                (Value::Float(lhs), Value::Float(rhs)) => Ok(Value::Float(lhs - rhs)),
-                _ => Err(ExecutionError::new(
-                    ExecutionErrorKind::InfixWithInvalidTypes,
-                )),
-            },
-            TokenKind::Asterisk => match (lhs, rhs) {
-                (Value::Integer(lhs), Value::Integer(rhs)) => Ok(Value::Integer(lhs * rhs)),
-                (Value::Float(lhs), Value::Float(rhs)) => Ok(Value::Float(lhs * rhs)),
-                _ => Err(ExecutionError::new(
-                    ExecutionErrorKind::InfixWithInvalidTypes,
-                )),
-            },
-            TokenKind::Slash => match (lhs, rhs) {
-                (Value::Integer(lhs), Value::Integer(rhs)) => Ok(Value::Integer(lhs / rhs)),
-                (Value::Float(lhs), Value::Float(rhs)) => Ok(Value::Float(lhs / rhs)),
-                _ => Err(ExecutionError::new(
-                    ExecutionErrorKind::InfixWithInvalidTypes,
-                )),
-            },
-            TokenKind::EqualsEquals => match (lhs, rhs) {
-                (Value::Integer(lhs), Value::Integer(rhs)) => Ok(Value::Boolean(lhs == rhs)),
-                (Value::Float(lhs), Value::Float(rhs)) => Ok(Value::Boolean(lhs == rhs)),
-                (Value::String(lhs), Value::String(rhs)) => Ok(Value::Boolean(lhs == rhs)),
-                (Value::Boolean(lhs), Value::Boolean(rhs)) => Ok(Value::Boolean(lhs == rhs)),
-                _ => Err(ExecutionError::new(
-                    ExecutionErrorKind::InfixWithInvalidTypes,
-                )),
-            },
-            TokenKind::ExclamationMarkEquals => match (lhs, rhs) {
-                (Value::Integer(lhs), Value::Integer(rhs)) => Ok(Value::Boolean(lhs != rhs)),
-                (Value::Float(lhs), Value::Float(rhs)) => Ok(Value::Boolean(lhs != rhs)),
-                (Value::String(lhs), Value::String(rhs)) => Ok(Value::Boolean(lhs != rhs)),
-                (Value::Boolean(lhs), Value::Boolean(rhs)) => Ok(Value::Boolean(lhs != rhs)),
-                _ => Err(ExecutionError::new(
-                    ExecutionErrorKind::InfixWithInvalidTypes,
-                )),
-            },
-            TokenKind::LessThan => match (lhs, rhs) {
-                (Value::Integer(lhs), Value::Integer(rhs)) => Ok(Value::Boolean(lhs < rhs)),
-                (Value::Float(lhs), Value::Float(rhs)) => Ok(Value::Boolean(lhs < rhs)),
-                (Value::String(lhs), Value::String(rhs)) => Ok(Value::Boolean(lhs < rhs)),
-                _ => Err(ExecutionError::new(
-                    ExecutionErrorKind::InfixWithInvalidTypes,
-                )),
-            },
-            TokenKind::LessThanEquals => match (lhs, rhs) {
-                (Value::Integer(lhs), Value::Integer(rhs)) => Ok(Value::Boolean(lhs <= rhs)),
-                (Value::Float(lhs), Value::Float(rhs)) => Ok(Value::Boolean(lhs <= rhs)),
-                (Value::String(lhs), Value::String(rhs)) => Ok(Value::Boolean(lhs <= rhs)),
-                _ => Err(ExecutionError::new(
-                    ExecutionErrorKind::InfixWithInvalidTypes,
-                )),
-            },
-            TokenKind::GreaterThan => match (lhs, rhs) {
-                (Value::Integer(lhs), Value::Integer(rhs)) => Ok(Value::Boolean(lhs > rhs)),
-                (Value::Float(lhs), Value::Float(rhs)) => Ok(Value::Boolean(lhs > rhs)),
-                (Value::String(lhs), Value::String(rhs)) => Ok(Value::Boolean(lhs > rhs)),
-                _ => Err(ExecutionError::new(
-                    ExecutionErrorKind::InfixWithInvalidTypes,
-                )),
-            },
-            TokenKind::GreaterThanEquals => match (lhs, rhs) {
-                (Value::Integer(lhs), Value::Integer(rhs)) => Ok(Value::Boolean(lhs >= rhs)),
-                (Value::Float(lhs), Value::Float(rhs)) => Ok(Value::Boolean(lhs >= rhs)),
-                (Value::String(lhs), Value::String(rhs)) => Ok(Value::Boolean(lhs >= rhs)),
-                _ => Err(ExecutionError::new(
-                    ExecutionErrorKind::InfixWithInvalidTypes,
-                )),
-            },
-            _ => Err(ExecutionError::new(
-                ExecutionErrorKind::InfixWithInvalidTypes,
-            )),
+            TokenKind::Plus => value.add(rhs)?,
+            TokenKind::Minus => value.subtract(rhs)?,
+            TokenKind::Asterisk => value.multiply(rhs)?,
+            TokenKind::Slash => value.divide(rhs)?,
+            TokenKind::Percent => value.modulo(rhs)?,
+
+            TokenKind::EqualsEquals => value.equals(rhs)?,
+            TokenKind::ExclamationMarkEquals => value.not_equals(rhs)?,
+            TokenKind::LessThan => value.less_than(rhs)?,
+            TokenKind::GreaterThan => value.greater_than(rhs)?,
+            TokenKind::LessThanEquals => value.less_than_equals(rhs)?,
+            TokenKind::GreaterThanEquals => value.greater_than_equals(rhs)?,
+            _ => panic!("Invalid infix operator: {:?}", operator),
         }
+
+        return Ok(value);
     }
 
     fn evaluate_if_statement(

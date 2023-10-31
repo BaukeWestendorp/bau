@@ -90,7 +90,9 @@ pub(crate) fn get_rules() -> Vec<Rule> {
     }
 
     vec![
+        char!(TokenKind::Plus),
         char!(TokenKind::Minus),
+        char!(TokenKind::Asterisk),
         char!(TokenKind::Slash),
         char!(TokenKind::ExclamationMark),
         char!(TokenKind::Equals),
@@ -105,6 +107,11 @@ pub(crate) fn get_rules() -> Vec<Rule> {
         two_chars!(TokenKind::LessThanEquals),
         two_chars!(TokenKind::GreaterThanEquals),
         two_chars!(TokenKind::Arrow),
+        two_chars!(TokenKind::PlusEquals),
+        two_chars!(TokenKind::MinusEquals),
+        two_chars!(TokenKind::AsteriskEquals),
+        two_chars!(TokenKind::SlashEquals),
+        two_chars!(TokenKind::PercentEquals),
         keyword!(TokenKind::Extend),
         keyword!(TokenKind::Fn),
         keyword!(TokenKind::Let),
@@ -133,8 +140,6 @@ pub(crate) fn get_unambiguous_token(char: char) -> Option<TokenKind> {
         ';' => Some(TokenKind::Semicolon),
         '.' => Some(TokenKind::Period),
         ',' => Some(TokenKind::Comma),
-        '+' => Some(TokenKind::Plus),
-        '*' => Some(TokenKind::Asterisk),
         _ => None,
     }
 }

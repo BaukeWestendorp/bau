@@ -21,8 +21,8 @@
         },
         "bau.executablePath": {
           "type": "string",
-          "default": "bau-core",
-          "description": "Path to the Bau executable (bau-core)"
+          "default": "bau",
+          "description": "Path to the Bau executable (bau)"
         },
         "bau.disableLanguageServer": {
           "type": "boolean",

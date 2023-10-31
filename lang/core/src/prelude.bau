@@ -1,5 +1,0 @@
-extend string {
-	fn scream() -> void {
-		print("HALLA");
-	}
-}

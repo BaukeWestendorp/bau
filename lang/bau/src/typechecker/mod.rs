@@ -76,7 +76,7 @@ impl CheckedStatement {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum CheckedExpression {
+pub enum CheckedExpressionKind {
     Literal(CheckedLiteralExpression),
     Variable(CheckedVariable),
     FunctionCall {
@@ -92,6 +92,26 @@ pub enum CheckedExpression {
         operator: TokenKind,
         right: Box<CheckedExpression>,
     },
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct CheckedExpression {
+    kind: CheckedExpressionKind,
+    range: CodeRange,
+}
+
+impl CheckedExpression {
+    pub fn new(kind: CheckedExpressionKind, range: CodeRange) -> Self {
+        Self { kind, range }
+    }
+
+    pub fn kind(&self) -> &CheckedExpressionKind {
+        &self.kind
+    }
+
+    pub fn range(&self) -> &CodeRange {
+        &self.range
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -339,7 +359,7 @@ impl Typechecker {
                             expected: type_.clone(),
                             actual: self.expression_type(&checked_initial_value)?,
                         },
-                        type_name.token().range.clone(),
+                        checked_initial_value.range,
                     ));
                 }
 
@@ -393,7 +413,7 @@ impl Typechecker {
                                 expected: parent_function_return_type.clone(),
                                 actual: self.expression_type(&checked_value)?,
                             },
-                            value.token().range.clone(),
+                            value.range().clone(),
                         ));
                     }
 
@@ -416,7 +436,10 @@ impl Typechecker {
         match expression.kind() {
             ParsedExpressionKind::Literal(literal) => {
                 let checked_literal = self.check_literal_expression(literal);
-                Ok(CheckedExpression::Literal(checked_literal))
+                Ok(CheckedExpression::new(
+                    CheckedExpressionKind::Literal(checked_literal),
+                    expression.range().clone(),
+                ))
             }
             ParsedExpressionKind::Variable(ident) => {
                 if !self.variable_exists(ident.name()) {
@@ -429,7 +452,10 @@ impl Typechecker {
                 }
 
                 let checked_variable = self.check_variable_expression(ident)?;
-                Ok(CheckedExpression::Variable(checked_variable))
+                Ok(CheckedExpression::new(
+                    CheckedExpressionKind::Variable(checked_variable),
+                    expression.range().clone(),
+                ))
             }
             ParsedExpressionKind::FunctionCall { name, arguments } => {
                 let mut checked_arguments = vec![];
@@ -438,35 +464,23 @@ impl Typechecker {
                     checked_arguments.push(checked_argument);
                 }
 
-                Ok(CheckedExpression::FunctionCall {
-                    name: Identifier::new(name.name().to_string(), name.token().clone()),
-                    arguments: checked_arguments,
-                })
+                Ok(CheckedExpression::new(
+                    CheckedExpressionKind::FunctionCall {
+                        name: Identifier::new(name.name().to_string(), name.token().clone()),
+                        arguments: checked_arguments,
+                    },
+                    expression.range().clone(),
+                ))
             }
             ParsedExpressionKind::PrefixOperator {
                 operator,
                 expression,
-            } => {
-                let checked_expression = self.check_expression(expression)?;
-                Ok(CheckedExpression::PrefixOperator {
-                    operator: operator.clone(),
-                    expression: Box::new(checked_expression),
-                })
-            }
+            } => self.check_prefix_operator(operator, expression),
             ParsedExpressionKind::InfixOperator {
                 left,
                 operator,
                 right,
-            } => {
-                let checked_left = self.check_expression(left)?;
-                let checked_right = self.check_expression(right)?;
-
-                Ok(CheckedExpression::InfixOperator {
-                    left: Box::new(checked_left),
-                    operator: operator.clone(),
-                    right: Box::new(checked_right),
-                })
-            }
+            } => self.check_infix_operator(left, operator, right),
         }
     }
 
@@ -501,6 +515,91 @@ impl Typechecker {
         }
     }
 
+    fn check_prefix_operator(
+        &mut self,
+        operator: &TokenKind,
+        expression: &ParsedExpression,
+    ) -> TypecheckerResult<CheckedExpression> {
+        let checked_expression = self.check_expression(expression)?;
+        let expression_type = self.expression_type(&checked_expression)?;
+
+        match operator {
+            TokenKind::Minus | TokenKind::Plus => match expression_type {
+                Type::Integer => Ok(CheckedExpression::new(
+                    CheckedExpressionKind::PrefixOperator {
+                        operator: operator.clone(),
+                        expression: Box::new(checked_expression),
+                    },
+                    expression.range().clone(),
+                )),
+                Type::Float => Ok(CheckedExpression::new(
+                    CheckedExpressionKind::PrefixOperator {
+                        operator: operator.clone(),
+                        expression: Box::new(checked_expression),
+                    },
+                    expression.range().clone(),
+                )),
+                _ => Err(TypecheckerError::new(
+                    TypecheckerErrorKind::TypeMismatch {
+                        expected: Type::Integer,
+                        actual: expression_type,
+                    },
+                    expression.range().clone(),
+                )),
+            },
+            TokenKind::ExclamationMark => match expression_type {
+                Type::Boolean => Ok(CheckedExpression::new(
+                    CheckedExpressionKind::PrefixOperator {
+                        operator: operator.clone(),
+                        expression: Box::new(checked_expression),
+                    },
+                    expression.range().clone(),
+                )),
+                _ => Err(TypecheckerError::new(
+                    TypecheckerErrorKind::TypeMismatch {
+                        expected: Type::Boolean,
+                        actual: expression_type,
+                    },
+                    expression.range().clone(),
+                )),
+            },
+            _ => panic!("Invalid prefix operator"),
+        }
+    }
+
+    fn check_infix_operator(
+        &mut self,
+        left: &ParsedExpression,
+        operator: &TokenKind,
+        right: &ParsedExpression,
+    ) -> TypecheckerResult<CheckedExpression> {
+        let checked_left = self.check_expression(left)?;
+        let checked_right = self.check_expression(right)?;
+
+        let left_type = self.expression_type(&checked_left)?;
+        let right_type = self.expression_type(&checked_right)?;
+
+        if left_type != right_type {
+            return Err(TypecheckerError::new(
+                TypecheckerErrorKind::IncompatibleInfixSides {
+                    left: left_type.clone(),
+                    operator: operator.clone(),
+                    right: right_type.clone(),
+                },
+                CodeRange::from_ranges(left.range().clone(), right.range().clone()),
+            ));
+        }
+
+        Ok(CheckedExpression::new(
+            CheckedExpressionKind::InfixOperator {
+                left: Box::new(checked_left),
+                operator: operator.clone(),
+                right: Box::new(checked_right),
+            },
+            left.range().clone(),
+        ))
+    }
+
     fn check_type(&mut self, type_name: &TypeName) -> TypecheckerResult<Type> {
         match type_name.name() {
             "void" => Ok(Type::Void),
@@ -518,15 +617,15 @@ impl Typechecker {
     }
 
     fn expression_type(&self, expression: &CheckedExpression) -> TypecheckerResult<Type> {
-        match expression {
-            CheckedExpression::Literal(literal) => match literal {
+        match expression.kind() {
+            CheckedExpressionKind::Literal(literal) => match literal {
                 CheckedLiteralExpression::Integer(_) => Ok(Type::Integer),
                 CheckedLiteralExpression::Float(_) => Ok(Type::Float),
                 CheckedLiteralExpression::String(_) => Ok(Type::String),
                 CheckedLiteralExpression::Boolean(_) => Ok(Type::Boolean),
             },
-            CheckedExpression::Variable(variable) => Ok(variable.type_.clone()),
-            CheckedExpression::FunctionCall { name, .. } => {
+            CheckedExpressionKind::Variable(variable) => Ok(variable.type_.clone()),
+            CheckedExpressionKind::FunctionCall { name, .. } => {
                 match self.get_function_definition_by_name(name.name()) {
                     Some(function_definition) => Ok(function_definition.return_type),
                     None => Err(TypecheckerError::new(
@@ -537,7 +636,7 @@ impl Typechecker {
                     )),
                 }
             }
-            CheckedExpression::PrefixOperator {
+            CheckedExpressionKind::PrefixOperator {
                 operator,
                 expression,
             } => match operator {
@@ -549,13 +648,13 @@ impl Typechecker {
                             expected: Type::Integer,
                             actual: self.expression_type(expression)?,
                         },
-                        todo!(),
+                        expression.range().clone(),
                     )),
                 },
                 TokenKind::ExclamationMark => Ok(Type::Boolean),
                 _ => panic!("Invalid prefix operator"),
             },
-            CheckedExpression::InfixOperator {
+            CheckedExpressionKind::InfixOperator {
                 left,
                 operator,
                 right,
@@ -569,7 +668,7 @@ impl Typechecker {
                             expected: left_type.clone(),
                             actual: right_type.clone(),
                         },
-                        todo!(),
+                        expression.range().clone(),
                     ));
                 }
 

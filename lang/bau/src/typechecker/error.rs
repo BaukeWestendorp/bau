@@ -1,17 +1,34 @@
 use crate::error::print_error;
 use crate::source::{CodeRange, Source};
+use crate::tokenizer::token::TokenKind;
 
 use super::Type;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum TypecheckerErrorKind {
-    UnknownType { type_name: String },
-    TypeMismatch { expected: Type, actual: Type },
-    VariableAlreadyDefined { name: String },
-    VariableNotDefined { name: String },
-    FunctionNotDefined { name: String },
+    UnknownType {
+        type_name: String,
+    },
+    TypeMismatch {
+        expected: Type,
+        actual: Type,
+    },
+    VariableAlreadyDefined {
+        name: String,
+    },
+    VariableNotDefined {
+        name: String,
+    },
+    FunctionNotDefined {
+        name: String,
+    },
     ReturnValueInVoidFunction,
     ExpectedReturnValue,
+    IncompatibleInfixSides {
+        left: Type,
+        operator: TokenKind,
+        right: Type,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -59,6 +76,29 @@ impl std::fmt::Display for TypecheckerError {
             TypecheckerErrorKind::ExpectedReturnValue => {
                 format!("Expected a return value")
             }
+            TypecheckerErrorKind::IncompatibleInfixSides {
+                left,
+                operator,
+                right,
+            } => match operator {
+                TokenKind::Plus | TokenKind::Minus | TokenKind::Asterisk | TokenKind::Slash => {
+                    format!("The `{}` operator can only be used between two floats or two ints, but found `{}` and `{}`", operator, left, right)
+                }
+                TokenKind::EqualsEquals
+                | TokenKind::ExclamationMarkEquals
+                | TokenKind::LessThan
+                | TokenKind::GreaterThan
+                | TokenKind::LessThanEquals
+                | TokenKind::GreaterThanEquals => {
+                    format!("The `{}` operator can only be used between two floats or two ints, but found `{}` and `{}`", operator, left, right)
+                }
+                _ => {
+                    format!(
+                        "Invalid types for `{}` operator: `{}` and `{}`",
+                        operator, left, right
+                    )
+                }
+            },
         };
 
         write!(f, "{}", str)

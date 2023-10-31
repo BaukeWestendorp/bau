@@ -124,20 +124,20 @@ pub enum ParsedExpressionKind {
 #[derive(Debug, Clone, PartialEq)]
 pub struct ParsedExpression {
     kind: ParsedExpressionKind,
-    token: Token,
+    range: CodeRange,
 }
 
 impl ParsedExpression {
-    pub fn new(kind: ParsedExpressionKind, token: Token) -> Self {
-        Self { kind, token }
+    pub fn new(kind: ParsedExpressionKind, range: CodeRange) -> Self {
+        Self { kind, range }
     }
 
     pub fn kind(&self) -> &ParsedExpressionKind {
         &self.kind
     }
 
-    pub fn token(&self) -> &Token {
-        &self.token
+    pub fn range(&self) -> &CodeRange {
+        &self.range
     }
 }
 
@@ -316,7 +316,7 @@ impl<'source> Parser<'source> {
     }
 
     fn parse_let_statement(&mut self) -> ParserResult<Option<ParsedStatement>> {
-        let start = self.peek()?.clone();
+        let start = self.current_token_range()?;
         self.consume_specific(TokenKind::Let)?;
 
         let type_name = self.parse_type_name()?;
@@ -338,32 +338,28 @@ impl<'source> Parser<'source> {
 
         self.consume_specific(TokenKind::Semicolon)?;
 
-        let end = self.peek()?.clone();
-
-        let range = CodeRange::from_ranges(start.range, end.range);
         Ok(Some(ParsedStatement::new(
             ParsedStatementKind::Let {
                 name,
                 type_name,
                 initial_value: initial_value.unwrap(),
             },
-            range,
+            CodeRange::from_ranges(start, self.current_token_range()?),
         )))
     }
 
     fn parse_return_statement(&mut self) -> ParserResult<Option<ParsedStatement>> {
-        let start = self.peek()?.clone();
+        let start = self.current_token_range()?;
 
         self.consume_specific(TokenKind::Return)?;
         let expr = self.parse_expression()?;
-        let end = self.peek()?.clone();
+        let end = self.current_token_range()?;
 
         self.consume_specific(TokenKind::Semicolon)?;
 
-        let range = CodeRange::from_ranges(start.range, end.range);
         Ok(Some(ParsedStatement::new(
             ParsedStatementKind::Return { value: expr },
-            range,
+            CodeRange::from_ranges(start, end),
         )))
     }
 
@@ -375,10 +371,9 @@ impl<'source> Parser<'source> {
         &mut self,
         min_binding_power: u8,
     ) -> ParserResult<Option<ParsedExpression>> {
-        let token = self.peek()?.clone();
+        let start = self.current_token_range()?;
 
         let mut lhs = self.parse_primary_expression(false)?;
-
         loop {
             let op = match self.peek_kind()? {
                 op @ (TokenKind::Plus
@@ -404,13 +399,14 @@ impl<'source> Parser<'source> {
 
                 self.consume_specific(op)?;
                 let rhs = self.parse_pratt_expression(right_binding_power)?;
+                let end = self.current_token_range()?;
                 lhs = Some(ParsedExpression::new(
                     ParsedExpressionKind::InfixOperator {
                         operator: op,
                         left: Box::new(lhs.unwrap()),
                         right: Box::new(rhs.unwrap()),
                     },
-                    token.clone(),
+                    CodeRange::from_ranges(start.clone(), end.clone()),
                 ));
 
                 continue;
@@ -434,11 +430,10 @@ impl<'source> Parser<'source> {
                 Ok(TokenKind::ParenOpen) => self.parse_function_call_expression(),
                 Ok(TokenKind::Period) if !ignore_members => match self.peek_kind_at(2) {
                     Ok(TokenKind::Identifier) => match self.peek_kind_at(3)? {
-                        TokenKind::ParenOpen => self.parse_method_call_expression(),
-                        _ => todo!(),
+                        TokenKind::ParenOpen => todo!("Implement method calls"),
+                        _ => todo!("Implement member access"),
                     },
-                    Err(_) => Ok(None),
-                    _ => todo!(),
+                    _ => Ok(None),
                 },
                 Err(_) => Ok(None),
                 _ => self.parse_identifier_expression(),
@@ -456,28 +451,30 @@ impl<'source> Parser<'source> {
                 ParserErrorKind::InvalidExpressionStart {
                     found: invalid_kind,
                 },
-                self.peek()?.range.clone(),
+                self.current_token_range()?,
             )),
         }
     }
+
     fn parse_prefix_operator_expression(&mut self) -> ParserResult<Option<ParsedExpression>> {
         let token = self.consume()?;
         match token.kind {
             TokenKind::Plus | TokenKind::Minus | TokenKind::ExclamationMark => {
+                let end = self.current_token_range()?;
                 if let Some(expression) = self.parse_primary_expression(false)? {
                     Ok(Some(ParsedExpression::new(
                         ParsedExpressionKind::PrefixOperator {
                             operator: token.kind,
                             expression: Box::new(expression),
                         },
-                        token.clone(),
+                        CodeRange::from_ranges(token.range, end),
                     )))
                 } else {
                     Err(ParserError::new(
                         ParserErrorKind::ExpectedExpression {
                             found: self.peek_kind()?,
                         },
-                        self.peek()?.range.clone(),
+                        CodeRange::from_ranges(token.range, end),
                     ))
                 }
             }
@@ -486,7 +483,8 @@ impl<'source> Parser<'source> {
     }
 
     fn parse_literal_expression(&mut self) -> ParserResult<Option<ParsedExpression>> {
-        let literal = match self.peek_kind()? {
+        let token = self.peek()?.clone();
+        let literal = match &token.kind {
             TokenKind::IntLiteral => {
                 let string_value = self.consume_specific(TokenKind::IntLiteral)?;
                 let string_value_text = self.text(&string_value);
@@ -516,23 +514,21 @@ impl<'source> Parser<'source> {
 
         Ok(Some(ParsedExpression::new(
             ParsedExpressionKind::Literal(literal),
-            self.peek()?.clone(),
+            token.range.clone(),
         )))
     }
 
     fn parse_function_call_expression(&mut self) -> ParserResult<Option<ParsedExpression>> {
+        let start = self.current_token_range()?;
         let name = self.parse_identifier()?;
         self.consume_specific(TokenKind::ParenOpen)?;
         let arguments = self.parse_function_arguments()?;
+        let end = self.current_token_range()?;
         self.consume_specific(TokenKind::ParenClose)?;
         Ok(Some(ParsedExpression::new(
             ParsedExpressionKind::FunctionCall { name, arguments },
-            self.peek()?.clone(),
+            CodeRange::from_ranges(start, end),
         )))
-    }
-
-    fn parse_method_call_expression(&mut self) -> ParserResult<Option<ParsedExpression>> {
-        todo!("Method calls are not implemented yet");
     }
 
     fn parse_identifier_expression(&mut self) -> ParserResult<Option<ParsedExpression>> {
@@ -543,7 +539,7 @@ impl<'source> Parser<'source> {
             TokenKind::ParenOpen => self.parse_function_call_expression(),
             _ => Ok(Some(ParsedExpression::new(
                 ParsedExpressionKind::Variable(ident),
-                token,
+                token.range,
             ))),
         }
     }
@@ -561,6 +557,10 @@ impl<'source> Parser<'source> {
             name,
             token: type_ident,
         })
+    }
+
+    fn current_token_range(&self) -> ParserResult<CodeRange> {
+        self.peek().map(|token| token.range.clone())
     }
 
     fn peek(&self) -> ParserResult<&Token> {

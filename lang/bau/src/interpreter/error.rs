@@ -10,6 +10,7 @@ pub enum ExecutionErrorKind {
     FunctionNotDefined { name: String },
     InvalidArgument { function: CheckedFunctionItem },
     InvalidNumberOfArguments { function: CheckedFunctionItem },
+    PrefixWithInvalidType,
     InfixWithVoidSide,
     InfixWithInvalidTypes,
 }
@@ -57,6 +58,9 @@ impl std::fmt::Display for ExecutionError {
                     "Invalid number of arguments for function `{}`",
                     function.definition.name
                 )
+            }
+            ExecutionErrorKind::PrefixWithInvalidType => {
+                format!("Prefix operator has invalid type")
             }
             ExecutionErrorKind::InfixWithVoidSide => {
                 format!("Infix operator can't be used with a side of type `void`")

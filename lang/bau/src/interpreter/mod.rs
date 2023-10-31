@@ -2,8 +2,8 @@ use std::collections::HashMap;
 
 use crate::tokenizer::token::TokenKind;
 use crate::typechecker::{
-    CheckedExpression, CheckedFunctionItem, CheckedItem, CheckedItemKind, CheckedLiteralExpression,
-    CheckedStatement, CheckedStatementKind,
+    CheckedExpression, CheckedExpressionKind, CheckedFunctionItem, CheckedItem, CheckedItemKind,
+    CheckedLiteralExpression, CheckedStatement, CheckedStatementKind,
 };
 
 pub mod error;
@@ -180,8 +180,8 @@ impl Interpreter {
         &mut self,
         expression: &CheckedExpression,
     ) -> ExecutionResult<Option<Value>> {
-        match expression {
-            CheckedExpression::Literal(literal) => {
+        match expression.kind() {
+            CheckedExpressionKind::Literal(literal) => {
                 let value = match literal {
                     CheckedLiteralExpression::Integer(value) => Value::Integer(*value),
                     CheckedLiteralExpression::String(value) => Value::String(value.clone()),
@@ -190,13 +190,13 @@ impl Interpreter {
                 };
                 Ok(Some(value))
             }
-            CheckedExpression::Variable(variable) => {
+            CheckedExpressionKind::Variable(variable) => {
                 let value = self
                     .current_scope_mut()
                     .get_variable_by_name(&variable.name)?;
                 Ok(Some(value.clone()))
             }
-            CheckedExpression::FunctionCall { name, arguments } => {
+            CheckedExpressionKind::FunctionCall { name, arguments } => {
                 let function = match self.get_function_by_name(name.name()) {
                     Some(function) => function.clone(),
                     None => {
@@ -210,13 +210,13 @@ impl Interpreter {
                 let return_value = self.evaluate_function(&function, arguments.clone())?;
                 Ok(return_value)
             }
-            CheckedExpression::PrefixOperator {
+            CheckedExpressionKind::PrefixOperator {
                 operator,
                 expression,
             } => self
                 .evaluate_prefix_operator(*operator, expression)
                 .map(Some),
-            CheckedExpression::InfixOperator {
+            CheckedExpressionKind::InfixOperator {
                 operator,
                 left,
                 right,
@@ -242,24 +242,24 @@ impl Interpreter {
                 Value::Integer(value) => Ok(Value::Integer(-value)),
                 Value::Float(value) => Ok(Value::Float(-value)),
                 _ => Err(ExecutionError::new(
-                    ExecutionErrorKind::InfixWithInvalidTypes,
+                    ExecutionErrorKind::PrefixWithInvalidType,
                 )),
             },
             TokenKind::Plus => match value {
                 Value::Integer(value) => Ok(Value::Integer(value)),
                 Value::Float(value) => Ok(Value::Float(value)),
                 _ => Err(ExecutionError::new(
-                    ExecutionErrorKind::InfixWithInvalidTypes,
+                    ExecutionErrorKind::PrefixWithInvalidType,
                 )),
             },
             TokenKind::ExclamationMark => match value {
                 Value::Boolean(value) => Ok(Value::Boolean(!value)),
                 _ => Err(ExecutionError::new(
-                    ExecutionErrorKind::InfixWithInvalidTypes,
+                    ExecutionErrorKind::PrefixWithInvalidType,
                 )),
             },
             _ => Err(ExecutionError::new(
-                ExecutionErrorKind::InfixWithInvalidTypes,
+                ExecutionErrorKind::PrefixWithInvalidType,
             )),
         }
     }

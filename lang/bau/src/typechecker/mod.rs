@@ -1,9 +1,11 @@
 use std::collections::HashMap;
 
 use crate::interpreter::builtin;
+use crate::interpreter::value::Value;
 use crate::parser::{
-    Identifier, ParsedExpression, ParsedExpressionKind, ParsedFunctionParameter, ParsedItem,
-    ParsedItemKind, ParsedLiteralExpression, ParsedStatement, ParsedStatementKind, TypeName,
+    AssignmentOperator, Identifier, ParsedExpression, ParsedExpressionKind,
+    ParsedFunctionParameter, ParsedItem, ParsedItemKind, ParsedStatement, ParsedStatementKind,
+    PrefixOperator, TypeName,
 };
 
 use crate::source::CodeRange;
@@ -58,7 +60,7 @@ pub enum CheckedStatementKind {
     VariableAssignment {
         name: String,
         value: CheckedExpression,
-        operator: TokenKind,
+        operator: AssignmentOperator,
     },
     Return {
         value: Option<CheckedExpression>,
@@ -94,14 +96,14 @@ impl CheckedStatement {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum CheckedExpressionKind {
-    Literal(CheckedLiteralExpression),
+    Literal(Value),
     Variable(CheckedVariable),
     FunctionCall {
         name: Identifier,
         arguments: Vec<CheckedExpression>,
     },
     PrefixOperator {
-        operator: TokenKind,
+        operator: PrefixOperator,
         expression: Box<CheckedExpression>,
     },
     InfixOperator {
@@ -129,14 +131,6 @@ impl CheckedExpression {
     pub fn range(&self) -> &CodeRange {
         &self.range
     }
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum CheckedLiteralExpression {
-    Integer(i64),
-    Float(f64),
-    String(String),
-    Boolean(bool),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -603,74 +597,61 @@ impl Typechecker {
         expression: &ParsedExpression,
     ) -> TypecheckerResult<CheckedExpression> {
         match expression.kind() {
-            ParsedExpressionKind::Literal(literal) => {
-                let checked_literal = self.check_literal_expression(literal);
-                Ok(CheckedExpression::new(
-                    CheckedExpressionKind::Literal(checked_literal),
-                    *expression.range(),
-                ))
+            ParsedExpressionKind::Literal(_) => self.check_literal_expression(expression),
+            ParsedExpressionKind::Variable(_) => self.check_variable_expression(expression),
+            ParsedExpressionKind::FunctionCall { .. } => {
+                self.check_function_call_expression(expression)
             }
-            ParsedExpressionKind::Variable(ident) => {
-                if !self.variable_exists(ident.name()) {
-                    return Err(TypecheckerError::new(
-                        TypecheckerErrorKind::VariableNotDefined {
-                            name: ident.name().to_string(),
-                        },
-                        ident.token().range(),
-                    ));
-                }
-
-                let checked_variable = self.check_variable_expression(ident)?;
-                Ok(CheckedExpression::new(
-                    CheckedExpressionKind::Variable(checked_variable),
-                    *expression.range(),
-                ))
+            ParsedExpressionKind::PrefixOperator { .. } => {
+                self.check_prefix_operator_expression(expression)
             }
-            ParsedExpressionKind::FunctionCall { name, arguments } => {
-                let mut checked_arguments = vec![];
-                for argument in arguments.iter() {
-                    let checked_argument = self.check_expression(argument)?;
-                    checked_arguments.push(checked_argument);
-                }
-
-                Ok(CheckedExpression::new(
-                    CheckedExpressionKind::FunctionCall {
-                        name: Identifier::new(name.name().to_string(), name.token().clone()),
-                        arguments: checked_arguments,
-                    },
-                    *expression.range(),
-                ))
+            ParsedExpressionKind::InfixOperator { .. } => {
+                self.check_infix_operator_expression(expression)
             }
-            ParsedExpressionKind::PrefixOperator {
-                operator,
-                expression,
-            } => self.check_prefix_operator(operator, expression),
-            ParsedExpressionKind::InfixOperator {
-                left,
-                operator,
-                right,
-            } => self.check_infix_operator(left, operator, right),
         }
     }
 
     fn check_literal_expression(
         &mut self,
-        expression: &ParsedLiteralExpression,
-    ) -> CheckedLiteralExpression {
-        match expression {
-            ParsedLiteralExpression::Integer(value) => CheckedLiteralExpression::Integer(*value),
-            ParsedLiteralExpression::Float(value) => CheckedLiteralExpression::Float(*value),
-            ParsedLiteralExpression::String(value) => {
-                CheckedLiteralExpression::String(value.clone())
-            }
-            ParsedLiteralExpression::Boolean(value) => CheckedLiteralExpression::Boolean(*value),
-        }
+        expression: &ParsedExpression,
+    ) -> TypecheckerResult<CheckedExpression> {
+        let literal = match expression.kind() {
+            ParsedExpressionKind::Literal(literal) => literal,
+            _ => panic!("Expected literal expression"),
+        };
+
+        Ok(CheckedExpression::new(
+            CheckedExpressionKind::Literal(literal.clone()),
+            *expression.range(),
+        ))
     }
 
     fn check_variable_expression(
         &mut self,
-        ident: &Identifier,
-    ) -> TypecheckerResult<CheckedVariable> {
+        expression: &ParsedExpression,
+    ) -> TypecheckerResult<CheckedExpression> {
+        let name_ident = match expression.kind() {
+            ParsedExpressionKind::Variable(name) => name,
+            _ => panic!("Expected variable expression"),
+        };
+
+        if !self.variable_exists(name_ident.name()) {
+            return Err(TypecheckerError::new(
+                TypecheckerErrorKind::VariableNotDefined {
+                    name: name_ident.name().to_string(),
+                },
+                name_ident.token().range(),
+            ));
+        }
+
+        let checked_variable = self.check_variable(name_ident)?;
+        Ok(CheckedExpression::new(
+            CheckedExpressionKind::Variable(checked_variable),
+            *expression.range(),
+        ))
+    }
+
+    fn check_variable(&mut self, ident: &Identifier) -> TypecheckerResult<CheckedVariable> {
         let variable = self.get_variable_by_name(ident.name());
         if let Some(variable) = variable {
             Ok(variable)
@@ -684,16 +665,47 @@ impl Typechecker {
         }
     }
 
-    fn check_prefix_operator(
+    fn check_function_call_expression(
         &mut self,
-        operator: &TokenKind,
         expression: &ParsedExpression,
     ) -> TypecheckerResult<CheckedExpression> {
-        let checked_expression = self.check_expression(expression)?;
+        let (name, arguments) = match expression.kind() {
+            ParsedExpressionKind::FunctionCall { name, arguments } => (name, arguments),
+            _ => panic!("Expected function call expression"),
+        };
+
+        let mut checked_arguments = vec![];
+        for argument in arguments.iter() {
+            let checked_argument = self.check_expression(argument)?;
+            checked_arguments.push(checked_argument);
+        }
+
+        Ok(CheckedExpression::new(
+            CheckedExpressionKind::FunctionCall {
+                name: Identifier::new(name.name().to_string(), name.token().clone()),
+                arguments: checked_arguments,
+            },
+            *expression.range(),
+        ))
+    }
+
+    fn check_prefix_operator_expression(
+        &mut self,
+        expression: &ParsedExpression,
+    ) -> TypecheckerResult<CheckedExpression> {
+        let (operator, expr) = match expression.kind() {
+            ParsedExpressionKind::PrefixOperator {
+                operator,
+                expression,
+            } => (operator, expression),
+            _ => panic!("Expected prefix operator expression"),
+        };
+
+        let checked_expression = self.check_expression(expr)?;
         let expression_type = self.expression_type(&checked_expression)?;
 
         match operator {
-            TokenKind::Minus | TokenKind::Plus => match expression_type {
+            PrefixOperator::Minus | PrefixOperator::Plus => match expression_type {
                 Type::Integer => Ok(CheckedExpression::new(
                     CheckedExpressionKind::PrefixOperator {
                         operator: *operator,
@@ -716,7 +728,7 @@ impl Typechecker {
                     *expression.range(),
                 )),
             },
-            TokenKind::ExclamationMark => match expression_type {
+            PrefixOperator::ExclamationMark => match expression_type {
                 Type::Boolean => Ok(CheckedExpression::new(
                     CheckedExpressionKind::PrefixOperator {
                         operator: *operator,
@@ -732,16 +744,22 @@ impl Typechecker {
                     *expression.range(),
                 )),
             },
-            _ => panic!("Invalid prefix operator"),
         }
     }
 
-    fn check_infix_operator(
+    fn check_infix_operator_expression(
         &mut self,
-        left: &ParsedExpression,
-        operator: &TokenKind,
-        right: &ParsedExpression,
+        expression: &ParsedExpression,
     ) -> TypecheckerResult<CheckedExpression> {
+        let (left, operator, right) = match expression.kind() {
+            ParsedExpressionKind::InfixOperator {
+                left,
+                operator,
+                right,
+            } => (left, operator, right),
+            _ => panic!("Expected infix operator expression"),
+        };
+
         let checked_left = self.check_expression(left)?;
         let checked_right = self.check_expression(right)?;
 
@@ -788,10 +806,10 @@ impl Typechecker {
     fn expression_type(&self, expression: &CheckedExpression) -> TypecheckerResult<Type> {
         match expression.kind() {
             CheckedExpressionKind::Literal(literal) => match literal {
-                CheckedLiteralExpression::Integer(_) => Ok(Type::Integer),
-                CheckedLiteralExpression::Float(_) => Ok(Type::Float),
-                CheckedLiteralExpression::String(_) => Ok(Type::String),
-                CheckedLiteralExpression::Boolean(_) => Ok(Type::Boolean),
+                Value::Integer(_) => Ok(Type::Integer),
+                Value::Float(_) => Ok(Type::Float),
+                Value::String(_) => Ok(Type::String),
+                Value::Boolean(_) => Ok(Type::Boolean),
             },
             CheckedExpressionKind::Variable(variable) => Ok(variable.type_.clone()),
             CheckedExpressionKind::FunctionCall { name, .. } => {
@@ -809,19 +827,20 @@ impl Typechecker {
                 operator,
                 expression,
             } => match operator {
-                TokenKind::Minus | TokenKind::Plus => match self.expression_type(expression) {
-                    Ok(Type::Integer) => Ok(Type::Integer),
-                    Ok(Type::Float) => Ok(Type::Float),
-                    _ => Err(TypecheckerError::new(
-                        TypecheckerErrorKind::TypeMismatch {
-                            expected: Type::Integer,
-                            actual: self.expression_type(expression)?,
-                        },
-                        *expression.range(),
-                    )),
-                },
-                TokenKind::ExclamationMark => Ok(Type::Boolean),
-                _ => panic!("Invalid prefix operator"),
+                PrefixOperator::Minus | PrefixOperator::Plus => {
+                    match self.expression_type(expression) {
+                        Ok(Type::Integer) => Ok(Type::Integer),
+                        Ok(Type::Float) => Ok(Type::Float),
+                        _ => Err(TypecheckerError::new(
+                            TypecheckerErrorKind::TypeMismatch {
+                                expected: Type::Integer,
+                                actual: self.expression_type(expression)?,
+                            },
+                            *expression.range(),
+                        )),
+                    }
+                }
+                PrefixOperator::ExclamationMark => Ok(Type::Boolean),
             },
             CheckedExpressionKind::InfixOperator {
                 left,

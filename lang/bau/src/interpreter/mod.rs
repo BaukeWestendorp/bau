@@ -1,9 +1,10 @@
 use std::collections::HashMap;
 
+use crate::parser::{AssignmentOperator, Identifier, PrefixOperator};
 use crate::tokenizer::token::TokenKind;
 use crate::typechecker::{
     CheckedExpression, CheckedExpressionKind, CheckedFunctionDefinition, CheckedFunctionItem,
-    CheckedItem, CheckedItemKind, CheckedLiteralExpression, CheckedStatement, CheckedStatementKind,
+    CheckedItem, CheckedItemKind, CheckedStatement, CheckedStatementKind, CheckedVariable,
 };
 
 pub mod builtin;
@@ -12,9 +13,7 @@ pub mod value;
 
 use value::Value;
 
-pub use error::ExecutionError;
-
-use self::error::{ExecutionErrorKind, ExecutionResult};
+use self::error::ExecutionResult;
 
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct Scope {
@@ -28,42 +27,19 @@ impl Scope {
         }
     }
 
-    pub fn get_variable_by_name(&self, name: &str) -> ExecutionResult<&Value> {
+    pub fn get_variable(&self, name: &str) -> &Value {
         match self.variables.get(name) {
-            Some(value) => Ok(value),
-            None => Err(ExecutionError::new(
-                ExecutionErrorKind::VariableDoesNotExist {
-                    name: name.to_string(),
-                },
-            )),
+            Some(value) => value,
+            None => panic!("Variable with name `{}` not found", name),
         }
     }
 
-    pub fn declare_variable(&mut self, name: &str, value: Value) -> ExecutionResult<()> {
-        if self.variables.contains_key(name) {
-            return Err(ExecutionError::new(
-                ExecutionErrorKind::VariableAlreadyExists {
-                    name: name.to_string(),
-                },
-            ));
-        }
-
+    pub fn set_variable(&mut self, name: &str, value: Value) {
         self.variables.insert(name.to_string(), value);
-
-        Ok(())
     }
 
-    pub fn set_variable(&mut self, name: &str, value: Value) -> ExecutionResult<()> {
-        if let Some(variable) = self.variables.get_mut(name) {
-            *variable = value;
-            Ok(())
-        } else {
-            Err(ExecutionError::new(
-                ExecutionErrorKind::VariableDoesNotExist {
-                    name: name.to_string(),
-                },
-            ))
-        }
+    pub fn has_variable(&self, name: &str) -> bool {
+        self.variables.contains_key(name)
     }
 }
 
@@ -92,44 +68,31 @@ impl Interpreter {
         }
         self.register_items(checked_items);
 
-        let main_function = match self.main_function() {
-            Some(main_function) => main_function.clone(),
-            None => {
-                return Err(ExecutionError::new(
-                    ExecutionErrorKind::MainFunctionNotFound,
-                ))
-            }
-        };
-
-        self.evaluate_function(&main_function, vec![])
+        let main_function = self.main_function().clone();
+        self.evaluate_function(&main_function, &[])
     }
 
     pub fn evaluate_function(
         &mut self,
         function: &CheckedFunctionItem,
-        arguments: Vec<CheckedExpression>,
+        arguments: &[CheckedExpression],
     ) -> ExecutionResult<Option<Value>> {
         self.push_scope();
 
-        if arguments.len() != function.definition.parameters.len() {
-            return Err(ExecutionError::new(
-                ExecutionErrorKind::InvalidNumberOfArguments {
-                    name: function.definition.name.clone(),
-                    expected_number: function.definition.parameters.len(),
-                    found_number: arguments.len(),
-                },
-            ));
-        };
+        assert_eq!(
+            function.definition.parameters.len(),
+            arguments.len(),
+            "Typechecker should have checked argument counts. Expected {} arguments, but found {}",
+            function.definition.parameters.len(),
+            arguments.len(),
+        );
 
         for (i, argument) in arguments.iter().enumerate() {
-            if let Some(value) = self.evaluate_expression(argument)? {
-                self.current_scope_mut()
-                    .declare_variable(&function.definition.parameters[i].name, value)?;
-            } else {
-                return Err(ExecutionError::new(ExecutionErrorKind::InvalidArgument {
-                    function: function.clone(),
-                }));
-            }
+            let value = self
+                .evaluate_expression(argument)?
+                .expect("Typechecker should have checked for void expressions in function call");
+            self.current_scope_mut()
+                .set_variable(&function.definition.parameters[i].name, value);
         }
 
         match self.evaluate_block(&function.body)? {
@@ -149,33 +112,12 @@ impl Interpreter {
         statement: &CheckedStatement,
     ) -> ExecutionResult<Option<ControlFlowMode>> {
         match statement.kind() {
-            CheckedStatementKind::Return { value } => {
-                return match value {
-                    Some(value_expression) => {
-                        let return_value = self.evaluate_expression(value_expression)?;
-                        Ok(Some(ControlFlowMode::Return(return_value)))
-                    }
-                    None => Ok(Some(ControlFlowMode::Return(None))),
-                };
-            }
+            CheckedStatementKind::Return { value } => return self.evaluate_return_statement(value),
             CheckedStatementKind::Let {
                 name,
                 initial_value,
                 ..
-            } => {
-                let value = match self.evaluate_expression(initial_value)? {
-                    Some(initial_value) => initial_value,
-                    None => {
-                        return Err(ExecutionError::new(
-                            ExecutionErrorKind::VariableDoesNotExist {
-                                name: name.to_string(),
-                            },
-                        ))
-                    }
-                };
-
-                self.current_scope_mut().declare_variable(name, value)?;
-            }
+            } => self.evaluate_let_statement(name, initial_value)?,
             CheckedStatementKind::VariableAssignment {
                 name,
                 value,
@@ -189,14 +131,7 @@ impl Interpreter {
                 then_body,
                 else_body,
             } => return self.evaluate_if_statement(condition, then_body, else_body.as_deref()),
-            CheckedStatementKind::Loop { block } => loop {
-                self.push_scope();
-                if let Some(mode) = self.evaluate_block(block)? {
-                    self.pop_scope();
-                    return Ok(Some(mode));
-                }
-                self.pop_scope();
-            },
+            CheckedStatementKind::Loop { block } => return self.evaluate_loop_statement(block),
         };
         Ok(None)
     }
@@ -213,35 +148,53 @@ impl Interpreter {
         Ok(None)
     }
 
+    pub fn evaluate_return_statement(
+        &mut self,
+        value: &Option<CheckedExpression>,
+    ) -> ExecutionResult<Option<ControlFlowMode>> {
+        match value {
+            Some(value_expression) => {
+                let return_value = self.evaluate_expression(value_expression)?;
+                Ok(Some(ControlFlowMode::Return(return_value)))
+            }
+            None => Ok(Some(ControlFlowMode::Return(None))),
+        }
+    }
+
+    pub fn evaluate_let_statement(
+        &mut self,
+        name: &str,
+        initial_value: &CheckedExpression,
+    ) -> ExecutionResult<()> {
+        let value = self
+            .evaluate_expression(initial_value)?
+            .expect("Typechecker should have checked for void expressions in variable assignment");
+        self.current_scope_mut().set_variable(name, value);
+        Ok(())
+    }
+
     pub fn evaluate_variable_assignment(
         &mut self,
         name: &str,
         value: &CheckedExpression,
-        operator: &TokenKind,
+        operator: &AssignmentOperator,
     ) -> ExecutionResult<()> {
-        let value = match self.evaluate_expression(value)? {
-            Some(value) => value,
-            None => {
-                return Err(ExecutionError::new(
-                    ExecutionErrorKind::VariableDoesNotExist {
-                        name: name.to_string(),
-                    },
-                ))
-            }
-        };
+        let value = self
+            .evaluate_expression(value)?
+            .expect("Typechecker should have checked for void expressions in variable assignment");
 
-        let mut new_value = self.get_variable(name)?.clone();
+        let mut new_value = self.get_variable(name).clone();
         match operator {
-            TokenKind::Equals => new_value = value,
-            TokenKind::PlusEquals => new_value.add(value)?,
-            TokenKind::MinusEquals => new_value.subtract(value)?,
-            TokenKind::AsteriskEquals => new_value.multiply(value)?,
-            TokenKind::SlashEquals => new_value.divide(value)?,
-            TokenKind::PercentEquals => new_value.modulo(value)?,
-            _ => panic!("Invalid compound assignment operator: {:?}", operator),
+            AssignmentOperator::Equals => new_value = value,
+            AssignmentOperator::PlusEquals => new_value.add(value),
+            AssignmentOperator::MinusEquals => new_value.subtract(value),
+            AssignmentOperator::AsteriskEquals => new_value.multiply(value),
+            AssignmentOperator::SlashEquals => new_value.divide(value),
+            AssignmentOperator::PercentEquals => new_value.modulo(value),
         };
 
-        self.set_variable(name, new_value)
+        self.set_variable(name, new_value);
+        Ok(())
     }
 
     pub fn evaluate_expression(
@@ -249,42 +202,16 @@ impl Interpreter {
         expression: &CheckedExpression,
     ) -> ExecutionResult<Option<Value>> {
         match expression.kind() {
-            CheckedExpressionKind::Literal(literal) => {
-                let value = match literal {
-                    CheckedLiteralExpression::Integer(value) => Value::Integer(*value),
-                    CheckedLiteralExpression::String(value) => Value::String(value.clone()),
-                    CheckedLiteralExpression::Boolean(value) => Value::Boolean(*value),
-                    CheckedLiteralExpression::Float(value) => Value::Float(*value),
-                };
-                Ok(Some(value))
-            }
-            CheckedExpressionKind::Variable(variable) => {
-                let value = self.get_variable(&variable.name)?;
-                Ok(Some(value.clone()))
-            }
+            CheckedExpressionKind::Literal(literal) => Ok(Some(literal.clone())),
+            CheckedExpressionKind::Variable(variable) => self.evaluate_variable(variable),
             CheckedExpressionKind::FunctionCall { name, arguments } => {
-                if self.function_is_builtin(name.name()) {
-                    return builtin::evaluate_builtin_function(self, name.name(), arguments);
-                }
-
-                let function = match self.get_function_by_name(name.name()) {
-                    Some(function) => function.clone(),
-                    None => {
-                        return Err(ExecutionError::new(
-                            ExecutionErrorKind::FunctionNotDefined {
-                                name: name.name().to_string(),
-                            },
-                        ))
-                    }
-                };
-                let return_value = self.evaluate_function(&function, arguments.clone())?;
-                Ok(return_value)
+                self.evaluate_function_call(name, arguments)
             }
             CheckedExpressionKind::PrefixOperator {
                 operator,
                 expression,
             } => self
-                .evaluate_prefix_operator(*operator, expression)
+                .evaluate_prefix_operator(operator, expression)
                 .map(Some),
             CheckedExpressionKind::InfixOperator {
                 operator,
@@ -296,41 +223,48 @@ impl Interpreter {
         }
     }
 
+    pub fn evaluate_variable(&self, variable: &CheckedVariable) -> ExecutionResult<Option<Value>> {
+        let value = self.get_variable(&variable.name);
+        Ok(Some(value.clone()))
+    }
+
+    pub fn evaluate_function_call(
+        &mut self,
+        name: &Identifier,
+        arguments: &[CheckedExpression],
+    ) -> ExecutionResult<Option<Value>> {
+        if self.function_is_builtin(name.name()) {
+            return builtin::evaluate_builtin_function(self, name.name(), arguments);
+        }
+
+        let function = self.get_function(name.name()).clone();
+        self.evaluate_function(&function, arguments.clone())
+    }
+
     pub fn evaluate_prefix_operator(
         &mut self,
-        operator: TokenKind,
+        operator: &PrefixOperator,
         expression: &CheckedExpression,
     ) -> ExecutionResult<Value> {
-        let value = self.evaluate_expression(expression)?;
-        if value.is_none() {
-            return Err(ExecutionError::new(ExecutionErrorKind::InfixWithVoidSide));
-        }
-        let value = value.unwrap();
+        let value = self
+            .evaluate_expression(expression)?
+            .expect("Typechecker should have checked for void expressions");
 
         match operator {
-            TokenKind::Minus => match value {
+            PrefixOperator::Minus => match value {
                 Value::Integer(value) => Ok(Value::Integer(-value)),
                 Value::Float(value) => Ok(Value::Float(-value)),
-                _ => Err(ExecutionError::new(
-                    ExecutionErrorKind::PrefixWithInvalidType,
-                )),
+                _ => panic!("Typechecker should have checked for invalid prefix operands"),
             },
-            TokenKind::Plus => match value {
+            PrefixOperator::Plus => match value {
                 Value::Integer(value) => Ok(Value::Integer(value)),
                 Value::Float(value) => Ok(Value::Float(value)),
-                _ => Err(ExecutionError::new(
-                    ExecutionErrorKind::PrefixWithInvalidType,
-                )),
+                _ => panic!("Typechecker should have checked for invalid prefix operands"),
             },
-            TokenKind::ExclamationMark => match value {
+            PrefixOperator::ExclamationMark => match value {
                 Value::Boolean(value) => Ok(Value::Boolean(!value)),
-                _ => Err(ExecutionError::new(
-                    ExecutionErrorKind::PrefixWithInvalidType,
-                )),
+                _ => panic!("Typechecker should have checked for invalid prefix operands"),
             },
-            _ => Err(ExecutionError::new(
-                ExecutionErrorKind::PrefixWithInvalidType,
-            )),
         }
     }
 
@@ -340,27 +274,27 @@ impl Interpreter {
         left: &CheckedExpression,
         right: &CheckedExpression,
     ) -> ExecutionResult<Value> {
-        let lhs = self.evaluate_expression(left)?;
-        let rhs = self.evaluate_expression(right)?;
-        if lhs.is_none() || rhs.is_none() {
-            return Err(ExecutionError::new(ExecutionErrorKind::InfixWithVoidSide));
-        }
-        let mut value = lhs.unwrap();
-        let rhs = rhs.unwrap();
+        let lhs = self
+            .evaluate_expression(left)?
+            .expect("Typechecker should have checked for void expressions");
+        let rhs = self
+            .evaluate_expression(right)?
+            .expect("Typechecker should have checked for void expressions");
+        let mut value = lhs;
 
         match operator {
-            TokenKind::Plus => value.add(rhs)?,
-            TokenKind::Minus => value.subtract(rhs)?,
-            TokenKind::Asterisk => value.multiply(rhs)?,
-            TokenKind::Slash => value.divide(rhs)?,
-            TokenKind::Percent => value.modulo(rhs)?,
+            TokenKind::Plus => value.add(rhs),
+            TokenKind::Minus => value.subtract(rhs),
+            TokenKind::Asterisk => value.multiply(rhs),
+            TokenKind::Slash => value.divide(rhs),
+            TokenKind::Percent => value.modulo(rhs),
 
-            TokenKind::EqualsEquals => value.equals(rhs)?,
-            TokenKind::ExclamationMarkEquals => value.not_equals(rhs)?,
-            TokenKind::LessThan => value.less_than(rhs)?,
-            TokenKind::GreaterThan => value.greater_than(rhs)?,
-            TokenKind::LessThanEquals => value.less_than_equals(rhs)?,
-            TokenKind::GreaterThanEquals => value.greater_than_equals(rhs)?,
+            TokenKind::EqualsEquals => value.equals(rhs),
+            TokenKind::ExclamationMarkEquals => value.not_equals(rhs),
+            TokenKind::LessThan => value.less_than(rhs),
+            TokenKind::GreaterThan => value.greater_than(rhs),
+            TokenKind::LessThanEquals => value.less_than_equals(rhs),
+            TokenKind::GreaterThanEquals => value.greater_than_equals(rhs),
             _ => panic!("Invalid infix operator: {:?}", operator),
         }
 
@@ -393,6 +327,20 @@ impl Interpreter {
         Ok(None)
     }
 
+    fn evaluate_loop_statement(
+        &mut self,
+        block: &[CheckedStatement],
+    ) -> ExecutionResult<Option<ControlFlowMode>> {
+        loop {
+            self.push_scope();
+            if let Some(mode) = self.evaluate_block(block)? {
+                self.pop_scope();
+                return Ok(Some(mode));
+            }
+            self.pop_scope();
+        }
+    }
+
     fn register_items(&mut self, checked_items: &[CheckedItem]) {
         for item in checked_items {
             match item.kind() {
@@ -417,8 +365,10 @@ impl Interpreter {
         );
     }
 
-    pub fn main_function(&self) -> Option<&CheckedFunctionItem> {
-        self.functions.get("main")
+    pub fn main_function(&self) -> &CheckedFunctionItem {
+        self.functions
+            .get("main")
+            .expect("Typechecker should have checked for main function")
     }
 
     fn push_scope(&mut self) {
@@ -429,38 +379,32 @@ impl Interpreter {
         self.scope_stack.pop();
     }
 
-    fn get_variable(&self, name: &str) -> ExecutionResult<&Value> {
+    fn get_variable(&self, name: &str) -> &Value {
         for scope in self.scope_stack.iter().rev() {
-            if let Ok(value) = scope.get_variable_by_name(name) {
-                return Ok(value);
+            if scope.has_variable(name) {
+                return scope.get_variable(name);
             }
         }
-        Err(ExecutionError::new(
-            ExecutionErrorKind::VariableDoesNotExist {
-                name: name.to_string(),
-            },
-        ))
+        panic!("Variable with name `{}` not found", name);
     }
 
-    fn set_variable(&mut self, name: &str, value: Value) -> ExecutionResult<()> {
+    fn set_variable(&mut self, name: &str, value: Value) {
         for scope in self.scope_stack.iter_mut().rev() {
-            if scope.set_variable(name, value.clone()).is_ok() {
-                return Ok(());
+            if scope.has_variable(name) {
+                scope.set_variable(name, value);
+                return;
             }
         }
-        Err(ExecutionError::new(
-            ExecutionErrorKind::VariableDoesNotExist {
-                name: name.to_string(),
-            },
-        ))
     }
 
     fn current_scope_mut(&mut self) -> &mut Scope {
         self.scope_stack.last_mut().unwrap()
     }
 
-    fn get_function_by_name(&self, name: &str) -> Option<&CheckedFunctionItem> {
-        self.functions.get(name)
+    fn get_function(&self, name: &str) -> &CheckedFunctionItem {
+        self.functions
+            .get(name)
+            .expect("Typechecker should have checked if function exists")
     }
 
     fn function_is_builtin(&self, name: &str) -> bool {

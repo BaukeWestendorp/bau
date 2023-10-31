@@ -18,6 +18,12 @@ pub enum ParserErrorKind {
     InvalidExpressionStart {
         found: TokenKind,
     },
+    InvalidAssignmentOperator {
+        found: TokenKind,
+    },
+    InvalidPrefixOperator {
+        found: TokenKind,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -61,6 +67,12 @@ impl std::fmt::Display for ParserError {
             }
             ParserErrorKind::InvalidExpressionStart { found } => {
                 format!("Invalid start of expression `{}`", found)
+            }
+            ParserErrorKind::InvalidAssignmentOperator { found } => {
+                format!("Invalid assignment operator `{}`", found)
+            }
+            ParserErrorKind::InvalidPrefixOperator { found } => {
+                format!("Invalid prefix operator `{}`", found)
             }
         };
 

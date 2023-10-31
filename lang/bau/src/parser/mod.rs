@@ -1,3 +1,4 @@
+use crate::interpreter::value::Value;
 use crate::source::{CodeRange, Source};
 use crate::tokenizer::token::TokenKind;
 use crate::tokenizer::{Token, Tokenizer};
@@ -7,6 +8,52 @@ pub mod error;
 pub use error::ParserError;
 
 use self::error::{ParserErrorKind, ParserResult};
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum AssignmentOperator {
+    Equals,
+    PlusEquals,
+    MinusEquals,
+    AsteriskEquals,
+    SlashEquals,
+    PercentEquals,
+}
+
+impl TryFrom<TokenKind> for AssignmentOperator {
+    type Error = ();
+
+    fn try_from(value: TokenKind) -> Result<Self, Self::Error> {
+        match value {
+            TokenKind::Equals => Ok(Self::Equals),
+            TokenKind::PlusEquals => Ok(Self::PlusEquals),
+            TokenKind::MinusEquals => Ok(Self::MinusEquals),
+            TokenKind::AsteriskEquals => Ok(Self::AsteriskEquals),
+            TokenKind::SlashEquals => Ok(Self::SlashEquals),
+            TokenKind::PercentEquals => Ok(Self::PercentEquals),
+            _ => Err(()),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum PrefixOperator {
+    Plus,
+    Minus,
+    ExclamationMark,
+}
+
+impl TryFrom<TokenKind> for PrefixOperator {
+    type Error = ();
+
+    fn try_from(value: TokenKind) -> Result<Self, Self::Error> {
+        match value {
+            TokenKind::Plus => Ok(Self::Plus),
+            TokenKind::Minus => Ok(Self::Minus),
+            TokenKind::ExclamationMark => Ok(Self::ExclamationMark),
+            _ => Err(()),
+        }
+    }
+}
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct TypeName {
@@ -80,7 +127,7 @@ pub enum ParsedStatementKind {
     VariableAssignment {
         name: Identifier,
         value: ParsedExpression,
-        operator: TokenKind,
+        operator: AssignmentOperator,
     },
     Return {
         value: Option<ParsedExpression>,
@@ -120,14 +167,14 @@ impl ParsedStatement {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ParsedExpressionKind {
-    Literal(ParsedLiteralExpression),
+    Literal(Value),
     Variable(Identifier),
     FunctionCall {
         name: Identifier,
         arguments: Vec<ParsedExpression>,
     },
     PrefixOperator {
-        operator: TokenKind,
+        operator: PrefixOperator,
         expression: Box<ParsedExpression>,
     },
     InfixOperator {
@@ -175,14 +222,6 @@ impl Identifier {
     pub fn token(&self) -> &Token {
         &self.token
     }
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum ParsedLiteralExpression {
-    Integer(i64),
-    Float(f64),
-    String(String),
-    Boolean(bool),
 }
 
 impl<'source> Parser<'source> {
@@ -444,9 +483,19 @@ impl<'source> Parser<'source> {
         let end = self.current_token_range()?;
         self.consume_specific(TokenKind::Semicolon)?;
 
+        let operator = match AssignmentOperator::try_from(op.kind()) {
+            Ok(op) => op,
+            Err(_) => {
+                return Err(ParserError::new(
+                    ParserErrorKind::InvalidAssignmentOperator { found: op.kind() },
+                    op.range(),
+                ))
+            }
+        };
+
         Ok(Some(ParsedStatement::new(
             ParsedStatementKind::VariableAssignment {
-                operator: op.kind(),
+                operator,
                 name,
                 value: value.unwrap(),
             },
@@ -564,9 +613,20 @@ impl<'source> Parser<'source> {
             TokenKind::Plus | TokenKind::Minus | TokenKind::ExclamationMark => {
                 let end = self.current_token_range()?;
                 if let Some(expression) = self.parse_primary_expression(false)? {
+                    let operator = match PrefixOperator::try_from(token.kind()) {
+                        Ok(op) => op,
+                        Err(_) => {
+                            return Err(ParserError::new(
+                                ParserErrorKind::InvalidPrefixOperator {
+                                    found: token.kind(),
+                                },
+                                token.range(),
+                            ))
+                        }
+                    };
                     Ok(Some(ParsedExpression::new(
                         ParsedExpressionKind::PrefixOperator {
-                            operator: token.kind(),
+                            operator,
                             expression: Box::new(expression),
                         },
                         CodeRange::from_ranges(token.range(), end),
@@ -591,25 +651,25 @@ impl<'source> Parser<'source> {
                 let string_value = self.consume_specific(TokenKind::IntLiteral)?;
                 let string_value_text = self.text(&string_value);
                 let value = string_value_text.parse::<i64>().unwrap();
-                ParsedLiteralExpression::Integer(value)
+                Value::Integer(value)
             }
             TokenKind::FloatLiteral => {
                 let string_value = self.consume_specific(TokenKind::FloatLiteral)?;
                 let string_value_text = self.text(&string_value);
                 let value = string_value_text.parse::<f64>().unwrap();
-                ParsedLiteralExpression::Float(value)
+                Value::Float(value)
             }
             TokenKind::StringLiteral => {
                 let string_value = self.consume_specific(TokenKind::StringLiteral)?;
                 let string_value_text = self.text(&string_value);
                 let value = string_value_text[1..string_value_text.len() - 1].to_string();
-                ParsedLiteralExpression::String(value)
+                Value::String(value)
             }
             TokenKind::BoolLiteral => {
                 let string_value = self.consume_specific(TokenKind::BoolLiteral)?;
                 let string_value_text = self.text(&string_value);
                 let value = string_value_text.parse::<bool>().unwrap();
-                ParsedLiteralExpression::Boolean(value)
+                Value::Boolean(value)
             }
             _ => return Ok(None),
         };

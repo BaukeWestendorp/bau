@@ -1,6 +1,3 @@
-use super::error::ExecutionErrorKind;
-use super::ExecutionError;
-
 #[derive(Debug, Clone, PartialEq)]
 pub enum Value {
     Integer(i64),
@@ -33,162 +30,107 @@ impl Value {
         matches!(self, Value::String(_))
     }
 
-    pub fn add(&mut self, other: Value) -> Result<(), ExecutionError> {
+    pub fn add(&mut self, other: Value) {
         let value = match (self.clone(), other) {
             (Value::Integer(this), Value::Integer(other)) => Value::Integer(this + other),
             (Value::Float(this), Value::Float(other)) => Value::Float(this + other),
-            _ => {
-                return Err(ExecutionError::new(
-                    ExecutionErrorKind::InfixWithInvalidTypes,
-                ))
-            }
+            _ => panic!("Typechhecker should have checked these"),
         };
         *self = value;
-        Ok(())
     }
 
-    pub fn subtract(&mut self, other: Value) -> Result<(), ExecutionError> {
+    pub fn subtract(&mut self, other: Value) {
         let value = match (self.clone(), other) {
             (Value::Integer(this), Value::Integer(other)) => Value::Integer(this - other),
             (Value::Float(this), Value::Float(other)) => Value::Float(this - other),
-            _ => {
-                return Err(ExecutionError::new(
-                    ExecutionErrorKind::InfixWithInvalidTypes,
-                ))
-            }
+            _ => panic!("Typechhecker should have checked these"),
         };
         *self = value;
-        Ok(())
     }
 
-    pub fn multiply(&mut self, other: Value) -> Result<(), ExecutionError> {
+    pub fn multiply(&mut self, other: Value) {
         let value = match (self.clone(), other) {
             (Value::Integer(this), Value::Integer(other)) => Value::Integer(this * other),
             (Value::Float(this), Value::Float(other)) => Value::Float(this * other),
-            _ => {
-                return Err(ExecutionError::new(
-                    ExecutionErrorKind::InfixWithInvalidTypes,
-                ))
-            }
+            _ => panic!("Typechhecker should have checked these"),
         };
         *self = value;
-        Ok(())
     }
 
-    pub fn divide(&mut self, other: Value) -> Result<(), ExecutionError> {
+    pub fn divide(&mut self, other: Value) {
         let value = match (self.clone(), other) {
             (Value::Integer(this), Value::Integer(other)) => Value::Integer(this / other),
             (Value::Float(this), Value::Float(other)) => Value::Float(this / other),
-            _ => {
-                return Err(ExecutionError::new(
-                    ExecutionErrorKind::InfixWithInvalidTypes,
-                ))
-            }
+            _ => panic!("Typechhecker should have checked these"),
         };
         *self = value;
-        Ok(())
     }
 
-    pub fn modulo(&mut self, other: Value) -> Result<(), ExecutionError> {
+    pub fn modulo(&mut self, other: Value) {
         let value = match (self.clone(), other) {
             (Value::Integer(this), Value::Integer(other)) => Value::Integer(this % other),
             (Value::Float(this), Value::Float(other)) => Value::Float(this % other),
-            _ => {
-                return Err(ExecutionError::new(
-                    ExecutionErrorKind::InfixWithInvalidTypes,
-                ))
-            }
+            _ => panic!("Typechhecker should have checked these"),
         };
         *self = value;
-        Ok(())
     }
 
-    pub fn equals(&mut self, other: Value) -> Result<(), ExecutionError> {
+    pub fn equals(&mut self, other: Value) {
         let value = match (self.clone(), other) {
             (Value::Integer(this), Value::Integer(other)) => Value::Boolean(this == other),
             (Value::Float(this), Value::Float(other)) => Value::Boolean(this == other),
             (Value::String(this), Value::String(other)) => Value::Boolean(this == other),
             (Value::Boolean(this), Value::Boolean(other)) => Value::Boolean(this == other),
-            _ => {
-                return Err(ExecutionError::new(
-                    ExecutionErrorKind::InfixWithInvalidTypes,
-                ))
-            }
+            _ => panic!("Typechhecker should have checked these"),
         };
         *self = value;
-        Ok(())
     }
 
-    pub fn not_equals(&mut self, other: Value) -> Result<(), ExecutionError> {
+    pub fn not_equals(&mut self, other: Value) {
         let value = match (self.clone(), other) {
             (Value::Integer(this), Value::Integer(other)) => Value::Boolean(this != other),
             (Value::Float(this), Value::Float(other)) => Value::Boolean(this != other),
             (Value::String(this), Value::String(other)) => Value::Boolean(this != other),
             (Value::Boolean(this), Value::Boolean(other)) => Value::Boolean(this != other),
-            _ => {
-                return Err(ExecutionError::new(
-                    ExecutionErrorKind::InfixWithInvalidTypes,
-                ))
-            }
+            _ => panic!("Typechhecker should have checked these"),
         };
         *self = value;
-        Ok(())
     }
 
-    pub fn less_than(&mut self, other: Value) -> Result<(), ExecutionError> {
+    pub fn less_than(&mut self, other: Value) {
         let value = match (self.clone(), other) {
             (Value::Integer(this), Value::Integer(other)) => Value::Boolean(this < other),
             (Value::Float(this), Value::Float(other)) => Value::Boolean(this < other),
-            _ => {
-                return Err(ExecutionError::new(
-                    ExecutionErrorKind::InfixWithInvalidTypes,
-                ))
-            }
+            _ => panic!("Typechhecker should have checked these"),
         };
         *self = value;
-        Ok(())
     }
 
-    pub fn less_than_equals(&mut self, other: Value) -> Result<(), ExecutionError> {
+    pub fn less_than_equals(&mut self, other: Value) {
         let value = match (self.clone(), other) {
             (Value::Integer(this), Value::Integer(other)) => Value::Boolean(this <= other),
             (Value::Float(this), Value::Float(other)) => Value::Boolean(this <= other),
-            _ => {
-                return Err(ExecutionError::new(
-                    ExecutionErrorKind::InfixWithInvalidTypes,
-                ))
-            }
+            _ => panic!("Typechhecker should have checked these"),
         };
         *self = value;
-        Ok(())
     }
 
-    pub fn greater_than(&mut self, other: Value) -> Result<(), ExecutionError> {
+    pub fn greater_than(&mut self, other: Value) {
         let value = match (self.clone(), other) {
             (Value::Integer(this), Value::Integer(other)) => Value::Boolean(this > other),
             (Value::Float(this), Value::Float(other)) => Value::Boolean(this > other),
-            _ => {
-                return Err(ExecutionError::new(
-                    ExecutionErrorKind::InfixWithInvalidTypes,
-                ))
-            }
+            _ => panic!("Typechhecker should have checked these"),
         };
         *self = value;
-        Ok(())
     }
 
-    pub fn greater_than_equals(&mut self, other: Value) -> Result<(), ExecutionError> {
+    pub fn greater_than_equals(&mut self, other: Value) {
         let value = match (self.clone(), other) {
             (Value::Integer(this), Value::Integer(other)) => Value::Boolean(this >= other),
             (Value::Float(this), Value::Float(other)) => Value::Boolean(this >= other),
-            _ => {
-                return Err(ExecutionError::new(
-                    ExecutionErrorKind::InfixWithInvalidTypes,
-                ))
-            }
+            _ => panic!("Typechhecker should have checked these"),
         };
         *self = value;
-        Ok(())
     }
 }
 

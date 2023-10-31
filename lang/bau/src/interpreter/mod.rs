@@ -2,10 +2,11 @@ use std::collections::HashMap;
 
 use crate::tokenizer::token::TokenKind;
 use crate::typechecker::{
-    CheckedExpression, CheckedExpressionKind, CheckedFunctionItem, CheckedItem, CheckedItemKind,
-    CheckedLiteralExpression, CheckedStatement, CheckedStatementKind,
+    CheckedExpression, CheckedExpressionKind, CheckedFunctionDefinition, CheckedFunctionItem,
+    CheckedItem, CheckedItemKind, CheckedLiteralExpression, CheckedStatement, CheckedStatementKind,
 };
 
+pub mod builtin;
 pub mod error;
 pub mod value;
 
@@ -88,6 +89,9 @@ impl Interpreter {
     }
 
     pub fn run(&mut self, checked_items: &[CheckedItem]) -> ExecutionResult<Option<Value>> {
+        for builtin_function in builtin::BUILTIN_FUNCTIONS.values() {
+            self.register_function_definition(builtin_function, vec![]);
+        }
         self.register_items(checked_items);
 
         let main_function = match self.main_function() {
@@ -102,7 +106,7 @@ impl Interpreter {
         self.evaluate_function(&main_function, vec![])
     }
 
-    fn evaluate_function(
+    pub fn evaluate_function(
         &mut self,
         function: &CheckedFunctionItem,
         arguments: Vec<CheckedExpression>,
@@ -141,7 +145,7 @@ impl Interpreter {
         Ok(None)
     }
 
-    fn evaluate_statement(&mut self, statement: &CheckedStatement) -> ExecutionResult<()> {
+    pub fn evaluate_statement(&mut self, statement: &CheckedStatement) -> ExecutionResult<()> {
         match statement.kind() {
             CheckedStatementKind::Return { value } => {
                 self.control_flow_mode = match value {
@@ -176,7 +180,7 @@ impl Interpreter {
         }
     }
 
-    fn evaluate_expression(
+    pub fn evaluate_expression(
         &mut self,
         expression: &CheckedExpression,
     ) -> ExecutionResult<Option<Value>> {
@@ -197,6 +201,10 @@ impl Interpreter {
                 Ok(Some(value.clone()))
             }
             CheckedExpressionKind::FunctionCall { name, arguments } => {
+                if self.function_is_builtin(name.name()) {
+                    return builtin::evaluate_builtin_function(self, name.name(), arguments);
+                }
+
                 let function = match self.get_function_by_name(name.name()) {
                     Some(function) => function.clone(),
                     None => {
@@ -226,7 +234,7 @@ impl Interpreter {
         }
     }
 
-    fn evaluate_prefix_operator(
+    pub fn evaluate_prefix_operator(
         &mut self,
         operator: TokenKind,
         expression: &CheckedExpression,
@@ -264,7 +272,7 @@ impl Interpreter {
         }
     }
 
-    fn evaluate_infix_operator(
+    pub fn evaluate_infix_operator(
         &mut self,
         operator: TokenKind,
         left: &CheckedExpression,
@@ -368,14 +376,27 @@ impl Interpreter {
         for item in checked_items {
             match item.kind() {
                 CheckedItemKind::Function(function) => {
-                    self.functions
-                        .insert(function.definition.name.clone(), function.clone());
+                    self.register_function_definition(&function.definition, function.body.clone());
                 }
             }
         }
     }
 
-    fn main_function(&self) -> Option<&CheckedFunctionItem> {
+    fn register_function_definition(
+        &mut self,
+        function_definition: &CheckedFunctionDefinition,
+        body: Vec<CheckedStatement>,
+    ) {
+        self.functions.insert(
+            function_definition.name.clone(),
+            CheckedFunctionItem {
+                definition: function_definition.clone(),
+                body,
+            },
+        );
+    }
+
+    pub fn main_function(&self) -> Option<&CheckedFunctionItem> {
         self.functions.get("main")
     }
 
@@ -393,5 +414,9 @@ impl Interpreter {
 
     fn get_function_by_name(&self, name: &str) -> Option<&CheckedFunctionItem> {
         self.functions.get(name)
+    }
+
+    fn function_is_builtin(&self, name: &str) -> bool {
+        builtin::BUILTIN_FUNCTIONS.contains_key(name)
     }
 }

@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use crate::interpreter::builtin;
 use crate::parser::{
     Identifier, ParsedExpression, ParsedExpressionKind, ParsedFunctionParameter, ParsedItem,
     ParsedItemKind, ParsedLiteralExpression, ParsedStatement, ParsedStatementKind, TypeName,
@@ -185,6 +186,9 @@ impl Typechecker {
 
     pub fn check_items(&mut self, items: &[ParsedItem]) -> Vec<CheckedItem> {
         // First let's find all function definitions
+        for builtin_function in builtin::BUILTIN_FUNCTIONS.values() {
+            self.register_function(builtin_function.clone());
+        }
         for item in items.iter() {
             match item.kind() {
                 ParsedItemKind::Function(_) => {

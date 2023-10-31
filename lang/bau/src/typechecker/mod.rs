@@ -55,6 +55,10 @@ pub enum CheckedStatementKind {
         type_: Type,
         initial_value: CheckedExpression,
     },
+    VariableAssignment {
+        name: String,
+        value: CheckedExpression,
+    },
     Return {
         value: Option<CheckedExpression>,
     },
@@ -347,6 +351,9 @@ impl Typechecker {
             ParsedStatementKind::Loop { .. } => {
                 self.check_loop_statement(statement, parent_function_return_type)
             }
+            ParsedStatementKind::VariableAssignment { .. } => {
+                self.check_variable_assignment_statement(statement)
+            }
         }
     }
 
@@ -485,6 +492,46 @@ impl Typechecker {
                 })
             }
             _ => panic!("Expected loop statement"),
+        }
+    }
+
+    fn check_variable_assignment_statement(
+        &mut self,
+        statement: &ParsedStatement,
+    ) -> TypecheckerResult<CheckedStatement> {
+        match statement.kind() {
+            ParsedStatementKind::VariableAssignment { name, value } => {
+                if !self.variable_exists(name.name()) {
+                    return Err(TypecheckerError::new(
+                        TypecheckerErrorKind::VariableNotDefined {
+                            name: name.name().to_string(),
+                        },
+                        name.token().range(),
+                    ));
+                }
+
+                let variable = self.get_variable_by_name(name.name()).unwrap();
+                let checked_value = self.check_expression(value)?;
+
+                if variable.type_ != self.expression_type(&checked_value)? {
+                    return Err(TypecheckerError::new(
+                        TypecheckerErrorKind::TypeMismatch {
+                            expected: variable.type_.clone(),
+                            actual: self.expression_type(&checked_value)?,
+                        },
+                        *value.range(),
+                    ));
+                }
+
+                Ok(CheckedStatement {
+                    kind: CheckedStatementKind::VariableAssignment {
+                        name: name.name().to_string(),
+                        value: checked_value,
+                    },
+                    range: *statement.range(),
+                })
+            }
+            _ => panic!("Expected variable assignment statement"),
         }
     }
 

@@ -73,9 +73,7 @@ impl std::fmt::Display for TypecheckerError {
             TypecheckerErrorKind::ReturnValueInVoidFunction => {
                 "Cannot return a value in a void function".to_string()
             }
-            TypecheckerErrorKind::ExpectedReturnValue => {
-                "Expected a return value".to_string()
-            }
+            TypecheckerErrorKind::ExpectedReturnValue => "Expected a return value".to_string(),
             TypecheckerErrorKind::IncompatibleInfixSides {
                 left,
                 operator,

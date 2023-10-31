@@ -176,6 +176,9 @@ impl Interpreter {
 
                 self.current_scope_mut().declare_variable(name, value)?;
             }
+            CheckedStatementKind::VariableAssignment { name, value } => {
+                self.evaluate_variable_assignment(name, value)?
+            }
             CheckedStatementKind::Expression { expression } => {
                 self.evaluate_expression(expression)?;
             }
@@ -203,6 +206,25 @@ impl Interpreter {
         Ok(None)
     }
 
+    pub fn evaluate_variable_assignment(
+        &mut self,
+        name: &str,
+        value: &CheckedExpression,
+    ) -> ExecutionResult<()> {
+        let value = match self.evaluate_expression(value)? {
+            Some(value) => value,
+            None => {
+                return Err(ExecutionError::new(
+                    ExecutionErrorKind::VariableDoesNotExist {
+                        name: name.to_string(),
+                    },
+                ))
+            }
+        };
+
+        self.set_variable(name, value)
+    }
+
     pub fn evaluate_expression(
         &mut self,
         expression: &CheckedExpression,
@@ -218,9 +240,7 @@ impl Interpreter {
                 Ok(Some(value))
             }
             CheckedExpressionKind::Variable(variable) => {
-                let value = self
-                    .current_scope_mut()
-                    .get_variable_by_name(&variable.name)?;
+                let value = self.get_variable(&variable.name)?;
                 Ok(Some(value.clone()))
             }
             CheckedExpressionKind::FunctionCall { name, arguments } => {
@@ -429,6 +449,32 @@ impl Interpreter {
 
     fn pop_scope(&mut self) {
         self.scope_stack.pop();
+    }
+
+    fn get_variable(&self, name: &str) -> ExecutionResult<&Value> {
+        for scope in self.scope_stack.iter().rev() {
+            if let Ok(value) = scope.get_variable_by_name(name) {
+                return Ok(value);
+            }
+        }
+        Err(ExecutionError::new(
+            ExecutionErrorKind::VariableDoesNotExist {
+                name: name.to_string(),
+            },
+        ))
+    }
+
+    fn set_variable(&mut self, name: &str, value: Value) -> ExecutionResult<()> {
+        for scope in self.scope_stack.iter_mut().rev() {
+            if scope.set_variable(name, value.clone()).is_ok() {
+                return Ok(());
+            }
+        }
+        Err(ExecutionError::new(
+            ExecutionErrorKind::VariableDoesNotExist {
+                name: name.to_string(),
+            },
+        ))
     }
 
     fn current_scope_mut(&mut self) -> &mut Scope {

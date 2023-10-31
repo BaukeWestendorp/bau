@@ -93,6 +93,11 @@ impl<'input> Tokenizer<'input> {
                 SourceCoords::new(self.line, self.column),
             ),
         );
+        assert!(
+            self.cursor + len <= self.input.len(),
+            "Token out of bounds: {:?}",
+            token
+        );
         for char in self.input[self.cursor..self.cursor + len].chars() {
             self.column += 1;
             if char == '\n' {

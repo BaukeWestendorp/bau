@@ -370,9 +370,8 @@ impl<'source> Parser<'source> {
 
     fn parse_return_statement(&mut self) -> ParserResult<Option<ParsedStatement>> {
         let start = self.current_token_range()?;
+        let mut end = start;
         self.consume_specific(TokenKind::Return)?;
-
-        let mut end = self.current_token_range()?;
         if self.consume_if(TokenKind::Semicolon) {
             return Ok(Some(ParsedStatement::new(
                 ParsedStatementKind::Return { value: None },
@@ -381,7 +380,7 @@ impl<'source> Parser<'source> {
         }
 
         let expr = self.parse_expression()?;
-        end = self.current_token_range()?;
+        end = self.previous_token_range()?;
         self.consume_specific(TokenKind::Semicolon)?;
         Ok(Some(ParsedStatement::new(
             ParsedStatementKind::Return { value: expr },
@@ -656,13 +655,28 @@ impl<'source> Parser<'source> {
         self.peek().map(|token| token.range())
     }
 
+    fn previous_token_range(&self) -> ParserResult<CodeRange> {
+        self.peek_at(-1).map(|token| token.range())
+    }
+
     fn peek(&self) -> ParserResult<&Token> {
         self.peek_at(0)
     }
 
-    fn peek_at(&self, offset: usize) -> ParserResult<&Token> {
+    fn peek_at(&self, offset: isize) -> ParserResult<&Token> {
+        let index = (self.cursor as isize + offset) as usize;
+        if index >= self.tokens.len() {
+            return Err(ParserError::new(
+                ParserErrorKind::UnexpectedEndOfFile,
+                self.tokens
+                    .last()
+                    .cloned()
+                    .expect("input should have at least one character")
+                    .range(),
+            ));
+        }
         self.tokens
-            .get(self.cursor + offset)
+            .get(index)
             .map(Ok)
             .unwrap_or(Err(ParserError::new(
                 ParserErrorKind::UnexpectedEndOfFile,
@@ -678,7 +692,7 @@ impl<'source> Parser<'source> {
         self.peek_kind_at(0)
     }
 
-    fn peek_kind_at(&self, offset: usize) -> ParserResult<TokenKind> {
+    fn peek_kind_at(&self, offset: isize) -> ParserResult<TokenKind> {
         self.peek_at(offset).map(|token| token.kind())
     }
 

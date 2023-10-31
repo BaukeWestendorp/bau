@@ -353,7 +353,9 @@ impl Typechecker {
                 self.check_return_statement(statement, parent_function_return_type)
             }
             ParsedStatementKind::Expression { .. } => self.check_expression_statement(statement),
-            ParsedStatementKind::If { .. } => self.check_if_statement(statement),
+            ParsedStatementKind::If { .. } => {
+                self.check_if_statement(statement, parent_function_return_type)
+            }
             ParsedStatementKind::Loop { .. } => {
                 self.check_loop_statement(statement, parent_function_return_type)
             }
@@ -482,6 +484,7 @@ impl Typechecker {
     fn check_if_statement(
         &mut self,
         statement: &ParsedStatement,
+        parent_function_return_type: &Type,
     ) -> TypecheckerResult<CheckedStatement> {
         match statement.kind() {
             ParsedStatementKind::If {
@@ -501,12 +504,13 @@ impl Typechecker {
                 }
 
                 self.push_scope();
-                let checked_body = self.check_block(then_body, &Type::Void)?;
+                let checked_body = self.check_block(then_body, parent_function_return_type)?;
                 self.pop_scope();
 
                 let checked_else_body = if let Some(else_body) = else_body {
                     self.push_scope();
-                    let checked_else_body = self.check_block(else_body, &Type::Void)?;
+                    let checked_else_body =
+                        self.check_block(else_body, parent_function_return_type)?;
                     self.pop_scope();
                     Some(checked_else_body)
                 } else {

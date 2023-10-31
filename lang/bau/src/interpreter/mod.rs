@@ -186,9 +186,7 @@ impl Interpreter {
                 condition,
                 then_body,
                 else_body,
-            } => {
-                self.evaluate_if_statement(condition, then_body, else_body.as_deref())?;
-            }
+            } => return self.evaluate_if_statement(condition, then_body, else_body.as_deref()),
             CheckedStatementKind::Loop { block } => loop {
                 self.push_scope();
                 if let Some(mode) = self.evaluate_block(block)? {
@@ -427,15 +425,25 @@ impl Interpreter {
         condition: &CheckedExpression,
         then_body: &[CheckedStatement],
         else_body: Option<&[CheckedStatement]>,
-    ) -> ExecutionResult<()> {
+    ) -> ExecutionResult<Option<ControlFlowMode>> {
         let condition = self.evaluate_expression(condition)?.unwrap();
-        if condition == Value::Boolean(true) {
-            self.evaluate_block(then_body)?;
+        if condition.is_true() {
+            self.push_scope();
+            if let Some(mode) = self.evaluate_block(then_body)? {
+                self.pop_scope();
+                return Ok(Some(mode));
+            }
+            self.pop_scope();
         } else if let Some(else_body) = else_body {
-            self.evaluate_block(else_body)?;
+            self.push_scope();
+            if let Some(mode) = self.evaluate_block(else_body)? {
+                self.pop_scope();
+                return Ok(Some(mode));
+            }
+            self.pop_scope();
         }
 
-        Ok(())
+        Ok(None)
     }
 
     fn register_items(&mut self, checked_items: &[CheckedItem]) {

@@ -6,12 +6,15 @@ mod semantic_tokens;
 
 #[derive(Debug)]
 struct Backend {
-    _client: Client,
+    client: Client,
 }
 
 #[tower_lsp::async_trait]
 impl LanguageServer for Backend {
     async fn initialize(&self, _: InitializeParams) -> RpcResult<InitializeResult> {
+        self.client
+            .log_message(MessageType::INFO, "Bau Language Server Initialized")
+            .await;
         Ok(InitializeResult {
             server_info: None,
             capabilities: ServerCapabilities {
@@ -53,7 +56,11 @@ impl LanguageServer for Backend {
         &self,
         params: SemanticTokensParams,
     ) -> RpcResult<Option<SemanticTokensResult>> {
-        semantic_tokens::handle_semantic_tokens_full(params)
+        let x = semantic_tokens::handle_semantic_tokens_full(params);
+        self.client
+            .log_message(MessageType::INFO, "Bau Language Server Initialized")
+            .await;
+        x
     }
 }
 
@@ -63,6 +70,6 @@ async fn main() {
     #[cfg(feature = "runtime-agnostic")]
     let (stdin, stdout) = (stdin.compat(), stdout.compat_write());
 
-    let (service, socket) = LspService::new(|client| Backend { _client: client });
+    let (service, socket) = LspService::new(|client| Backend { client });
     Server::new(stdin, stdout, socket).serve(service).await;
 }

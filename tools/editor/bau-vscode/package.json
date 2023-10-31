@@ -23,6 +23,11 @@
           "type": "string",
           "default": "bau-core",
           "description": "Path to the Bau executable (bau-core)"
+        },
+        "bau.disableLanguageServer": {
+          "type": "boolean",
+          "default": false,
+          "description": "Disable the language server"
         }
       }
     },

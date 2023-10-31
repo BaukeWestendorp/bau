@@ -30,8 +30,8 @@ impl Bau {
                 } else {
                     let mut interpreter = interpreter::Interpreter::new();
                     match interpreter.run(&checked_items) {
-                        Ok(value) => {
-                            eprintln!("{:?}", value);
+                        Ok(_) => {
+                            // Finished executing successfully
                         }
                         Err(error) => {
                             error.print(&source);

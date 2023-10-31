@@ -4,9 +4,9 @@ use lazy_static::lazy_static;
 
 use crate::typechecker::{CheckedExpression, CheckedFunctionDefinition};
 
-use super::error::ExecutionResult;
+use super::error::{ExecutionErrorKind, ExecutionResult};
 use super::value::Value;
-use super::Interpreter;
+use super::{ExecutionError, Interpreter};
 
 macro_rules! function_definition {
     (fn $name:ident($($arg_name:ident: $arg_type:ty),*) -> $return_type:ty) => {
@@ -54,12 +54,26 @@ pub fn evaluate_builtin_function(
     name: &str,
     arguments: &Vec<CheckedExpression>,
 ) -> ExecutionResult<Option<Value>> {
+    let builtin_definition = BUILTIN_FUNCTIONS.get(name).unwrap();
+
+    if arguments.len() != builtin_definition.parameters.len() {
+        return Err(ExecutionError::new(
+            ExecutionErrorKind::InvalidNumberOfArguments {
+                name: name.to_string(),
+                expected_number: builtin_definition.parameters.len(),
+                found_number: arguments.len(),
+            },
+        ));
+    };
+
     match name {
         "print" => {
-            let value = interpreter.evaluate_expression(&arguments[0])?;
-            println!("{:?}", value);
+            match interpreter.evaluate_expression(&arguments[0])? {
+                Some(value) => println!("{}", value),
+                None => println!("None"),
+            }
             Ok(None)
         }
-        _ => panic!("Unknown builtin function"),
+        _ => panic!("Unknown builtin function `{}`", name),
     }
 }

@@ -5,11 +5,23 @@ use crate::typechecker::CheckedFunctionItem;
 #[derive(Debug, Clone, PartialEq)]
 pub enum ExecutionErrorKind {
     MainFunctionNotFound,
-    VariableDoesNotExist { name: String },
-    VariableAlreadyExists { name: String },
-    FunctionNotDefined { name: String },
-    InvalidArgument { function: CheckedFunctionItem },
-    InvalidNumberOfArguments { function: CheckedFunctionItem },
+    VariableDoesNotExist {
+        name: String,
+    },
+    VariableAlreadyExists {
+        name: String,
+    },
+    FunctionNotDefined {
+        name: String,
+    },
+    InvalidArgument {
+        function: CheckedFunctionItem,
+    },
+    InvalidNumberOfArguments {
+        name: String,
+        expected_number: usize,
+        found_number: usize,
+    },
     PrefixWithInvalidType,
     InfixWithVoidSide,
     InfixWithInvalidTypes,
@@ -35,9 +47,7 @@ impl std::error::Error for ExecutionError {}
 impl std::fmt::Display for ExecutionError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         let str = match &self.kind {
-            ExecutionErrorKind::MainFunctionNotFound => {
-                "Main function not found".to_string()
-            }
+            ExecutionErrorKind::MainFunctionNotFound => "Main function not found".to_string(),
             ExecutionErrorKind::VariableDoesNotExist { name } => {
                 format!("Variable `{}` does not exist", name)
             }
@@ -53,10 +63,14 @@ impl std::fmt::Display for ExecutionError {
                     function.definition.name
                 )
             }
-            ExecutionErrorKind::InvalidNumberOfArguments { function } => {
+            ExecutionErrorKind::InvalidNumberOfArguments {
+                name,
+                expected_number,
+                found_number,
+            } => {
                 format!(
-                    "Invalid number of arguments for function `{}`",
-                    function.definition.name
+                    "Invalid number of arguments for function `{}`: expected {}, found {}",
+                    name, expected_number, found_number
                 )
             }
             ExecutionErrorKind::PrefixWithInvalidType => {

@@ -58,6 +58,9 @@ pub enum CheckedStatementKind {
     Return {
         value: Option<CheckedExpression>,
     },
+    Expression {
+        expression: CheckedExpression,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -328,6 +331,7 @@ impl Typechecker {
             ParsedStatementKind::Return { .. } => {
                 self.check_return_statement(statement, parent_function_return_type)
             }
+            ParsedStatementKind::Expression { .. } => self.check_expression_statement(statement),
         }
     }
 
@@ -426,6 +430,24 @@ impl Typechecker {
                 }
             }
             _ => panic!("Expected return statement"),
+        }
+    }
+
+    fn check_expression_statement(
+        &mut self,
+        statement: &ParsedStatement,
+    ) -> TypecheckerResult<CheckedStatement> {
+        match statement.kind() {
+            ParsedStatementKind::Expression { expression } => {
+                let checked_expression = self.check_expression(&expression)?;
+                Ok(CheckedStatement {
+                    kind: CheckedStatementKind::Expression {
+                        expression: checked_expression,
+                    },
+                    range: *statement.range(),
+                })
+            }
+            _ => panic!("Expected expression statement"),
         }
     }
 

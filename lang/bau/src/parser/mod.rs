@@ -80,6 +80,9 @@ pub enum ParsedStatementKind {
     Return {
         value: Option<ParsedExpression>,
     },
+    Expression {
+        expression: ParsedExpression,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -311,7 +314,7 @@ impl<'source> Parser<'source> {
         match self.peek_kind()? {
             TokenKind::Let => self.parse_let_statement(),
             TokenKind::Return => self.parse_return_statement(),
-            _ => Ok(None),
+            _ => self.parse_expression_statement(),
         }
     }
 
@@ -361,6 +364,20 @@ impl<'source> Parser<'source> {
             ParsedStatementKind::Return { value: expr },
             CodeRange::from_ranges(start, end),
         )))
+    }
+
+    fn parse_expression_statement(&mut self) -> ParserResult<Option<ParsedStatement>> {
+        let start = self.current_token_range()?;
+        if let Some(expression) = self.parse_expression()? {
+            let end = self.current_token_range()?;
+            self.consume_specific(TokenKind::Semicolon)?;
+            Ok(Some(ParsedStatement::new(
+                ParsedStatementKind::Expression { expression },
+                CodeRange::from_ranges(start, end),
+            )))
+        } else {
+            Ok(None)
+        }
     }
 
     fn parse_expression(&mut self) -> ParserResult<Option<ParsedExpression>> {

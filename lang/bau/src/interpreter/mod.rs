@@ -116,10 +116,13 @@ impl Interpreter {
         if arguments.len() != function.definition.parameters.len() {
             return Err(ExecutionError::new(
                 ExecutionErrorKind::InvalidNumberOfArguments {
-                    function: function.clone(),
+                    name: function.definition.name.clone(),
+                    expected_number: function.definition.parameters.len(),
+                    found_number: arguments.len(),
                 },
             ));
         };
+
         for (i, argument) in arguments.iter().enumerate() {
             if let Some(value) = self.evaluate_expression(argument)? {
                 self.current_scope_mut()
@@ -175,6 +178,10 @@ impl Interpreter {
 
                 self.current_scope_mut().declare_variable(name, value)?;
 
+                Ok(())
+            }
+            CheckedStatementKind::Expression { expression } => {
+                self.evaluate_expression(expression)?;
                 Ok(())
             }
         }

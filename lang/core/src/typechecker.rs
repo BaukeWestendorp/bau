@@ -435,7 +435,7 @@ impl Typechecker {
         match statement {
             ParsedStmt::Assignment { expr, name } => {
                 let expr = self.check_expression(expr)?;
-                let var_type = self.get_var(name);
+                let var_type = self.get_variable_type(*name);
                 if var_type != expr.type_id {
                     return typechecker_error!(
                         expr.span,

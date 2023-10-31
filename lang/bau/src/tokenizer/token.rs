@@ -121,8 +121,8 @@ impl std::fmt::Display for TokenKind {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Token {
-    pub kind: TokenKind,
-    pub range: CodeRange,
+    kind: TokenKind,
+    range: CodeRange,
 }
 
 impl Token {
@@ -130,8 +130,20 @@ impl Token {
         Self { kind, range }
     }
 
+    pub fn kind(&self) -> TokenKind {
+        self.kind
+    }
+
+    pub fn range(&self) -> CodeRange {
+        self.range
+    }
+
     pub fn len(&self) -> usize {
         self.range.span.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
     }
 
     pub fn is(&self, kind: TokenKind) -> bool {

@@ -8,7 +8,7 @@ pub mod source;
 pub mod tokenizer;
 mod typechecker;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct Bau {}
 
 impl Bau {

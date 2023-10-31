@@ -215,7 +215,7 @@ impl Typechecker {
                     };
                     checked_items.push(CheckedItem {
                         kind: CheckedItemKind::Function(function),
-                        range: item.range().clone(),
+                        range: *item.range(),
                     });
                 }
             }
@@ -231,28 +231,26 @@ impl Typechecker {
 
         let definition = self.check_function_definition(function_item, true)?;
 
-        let function = match function_item.kind() {
-            ParsedItemKind::Function(function) => function,
-        };
+        let ParsedItemKind::Function(function) = function_item.kind();
 
         let body = self.check_function_body(&function.body, &definition.return_type)?;
 
-        let return_statement = body.iter().find(|statement| match statement.kind() {
-            CheckedStatementKind::Return { .. } => true,
-            _ => false,
-        });
-
-        if definition.return_type == Type::Void && return_statement.is_some() {
-            self.pop_scope();
-            return Err(TypecheckerError::new(
-                TypecheckerErrorKind::ReturnValueInVoidFunction,
-                return_statement.unwrap().range().clone(),
-            ));
-        } else if definition.return_type != Type::Void && return_statement.is_none() {
+        let return_statement = body
+            .iter()
+            .find(|statement| matches!(statement.kind(), CheckedStatementKind::Return { .. }));
+        if let Some(return_statement) = return_statement {
+            if definition.return_type == Type::Void {
+                self.pop_scope();
+                return Err(TypecheckerError::new(
+                    TypecheckerErrorKind::ReturnValueInVoidFunction,
+                    *return_statement.range(),
+                ));
+            }
+        } else if definition.return_type != Type::Void {
             self.pop_scope();
             return Err(TypecheckerError::new(
                 TypecheckerErrorKind::ExpectedReturnValue,
-                function_item.range().clone(),
+                *function_item.range(),
             ));
         }
 
@@ -266,9 +264,7 @@ impl Typechecker {
         function_item: &ParsedItem,
         register_parameters: bool,
     ) -> TypecheckerResult<CheckedFunctionDefinition> {
-        let function = match function_item.kind() {
-            ParsedItemKind::Function(function) => function,
-        };
+        let ParsedItemKind::Function(function) = function_item.kind();
 
         let parameters = self.check_function_parameters(&function.parameters)?;
 
@@ -346,7 +342,7 @@ impl Typechecker {
                         TypecheckerErrorKind::VariableAlreadyDefined {
                             name: name.name().to_string(),
                         },
-                        name.token().range.clone(),
+                        name.token().range(),
                     ));
                 }
 
@@ -374,7 +370,7 @@ impl Typechecker {
                         type_,
                         initial_value: checked_initial_value,
                     },
-                    range: statement.range().clone(),
+                    range: *statement.range(),
                 })
             }
             _ => panic!("Expected let statement"),
@@ -391,17 +387,17 @@ impl Typechecker {
                 if parent_function_return_type == &Type::Void && value.is_some() {
                     Err(TypecheckerError::new(
                         TypecheckerErrorKind::ReturnValueInVoidFunction,
-                        statement.range().clone(),
+                        *statement.range(),
                     ))
                 } else if parent_function_return_type != &Type::Void && value.is_none() {
                     Err(TypecheckerError::new(
                         TypecheckerErrorKind::ExpectedReturnValue,
-                        statement.range().clone(),
+                        *statement.range(),
                     ))
                 } else if parent_function_return_type == &Type::Void && value.is_none() {
                     Ok(CheckedStatement {
                         kind: CheckedStatementKind::Return { value: None },
-                        range: statement.range().clone(),
+                        range: *statement.range(),
                     })
                 } else {
                     let value = value.clone().unwrap();
@@ -413,7 +409,7 @@ impl Typechecker {
                                 expected: parent_function_return_type.clone(),
                                 actual: self.expression_type(&checked_value)?,
                             },
-                            value.range().clone(),
+                            *value.range(),
                         ));
                     }
 
@@ -421,7 +417,7 @@ impl Typechecker {
                         kind: CheckedStatementKind::Return {
                             value: Some(checked_value),
                         },
-                        range: statement.range().clone(),
+                        range: *statement.range(),
                     })
                 }
             }
@@ -438,7 +434,7 @@ impl Typechecker {
                 let checked_literal = self.check_literal_expression(literal);
                 Ok(CheckedExpression::new(
                     CheckedExpressionKind::Literal(checked_literal),
-                    expression.range().clone(),
+                    *expression.range(),
                 ))
             }
             ParsedExpressionKind::Variable(ident) => {
@@ -447,14 +443,14 @@ impl Typechecker {
                         TypecheckerErrorKind::VariableNotDefined {
                             name: ident.name().to_string(),
                         },
-                        ident.token().range.clone(),
+                        ident.token().range(),
                     ));
                 }
 
                 let checked_variable = self.check_variable_expression(ident)?;
                 Ok(CheckedExpression::new(
                     CheckedExpressionKind::Variable(checked_variable),
-                    expression.range().clone(),
+                    *expression.range(),
                 ))
             }
             ParsedExpressionKind::FunctionCall { name, arguments } => {
@@ -469,7 +465,7 @@ impl Typechecker {
                         name: Identifier::new(name.name().to_string(), name.token().clone()),
                         arguments: checked_arguments,
                     },
-                    expression.range().clone(),
+                    *expression.range(),
                 ))
             }
             ParsedExpressionKind::PrefixOperator {
@@ -510,7 +506,7 @@ impl Typechecker {
                 TypecheckerErrorKind::VariableNotDefined {
                     name: ident.name().to_string(),
                 },
-                ident.token().range.clone(),
+                ident.token().range(),
             ))
         }
     }
@@ -527,40 +523,40 @@ impl Typechecker {
             TokenKind::Minus | TokenKind::Plus => match expression_type {
                 Type::Integer => Ok(CheckedExpression::new(
                     CheckedExpressionKind::PrefixOperator {
-                        operator: operator.clone(),
+                        operator: *operator,
                         expression: Box::new(checked_expression),
                     },
-                    expression.range().clone(),
+                    *expression.range(),
                 )),
                 Type::Float => Ok(CheckedExpression::new(
                     CheckedExpressionKind::PrefixOperator {
-                        operator: operator.clone(),
+                        operator: *operator,
                         expression: Box::new(checked_expression),
                     },
-                    expression.range().clone(),
+                    *expression.range(),
                 )),
                 _ => Err(TypecheckerError::new(
                     TypecheckerErrorKind::TypeMismatch {
                         expected: Type::Integer,
                         actual: expression_type,
                     },
-                    expression.range().clone(),
+                    *expression.range(),
                 )),
             },
             TokenKind::ExclamationMark => match expression_type {
                 Type::Boolean => Ok(CheckedExpression::new(
                     CheckedExpressionKind::PrefixOperator {
-                        operator: operator.clone(),
+                        operator: *operator,
                         expression: Box::new(checked_expression),
                     },
-                    expression.range().clone(),
+                    *expression.range(),
                 )),
                 _ => Err(TypecheckerError::new(
                     TypecheckerErrorKind::TypeMismatch {
                         expected: Type::Boolean,
                         actual: expression_type,
                     },
-                    expression.range().clone(),
+                    *expression.range(),
                 )),
             },
             _ => panic!("Invalid prefix operator"),
@@ -583,20 +579,20 @@ impl Typechecker {
             return Err(TypecheckerError::new(
                 TypecheckerErrorKind::IncompatibleInfixSides {
                     left: left_type.clone(),
-                    operator: operator.clone(),
+                    operator: *operator,
                     right: right_type.clone(),
                 },
-                CodeRange::from_ranges(left.range().clone(), right.range().clone()),
+                CodeRange::from_ranges(*left.range(), *right.range()),
             ));
         }
 
         Ok(CheckedExpression::new(
             CheckedExpressionKind::InfixOperator {
                 left: Box::new(checked_left),
-                operator: operator.clone(),
+                operator: *operator,
                 right: Box::new(checked_right),
             },
-            left.range().clone(),
+            *left.range(),
         ))
     }
 
@@ -611,7 +607,7 @@ impl Typechecker {
                 TypecheckerErrorKind::UnknownType {
                     type_name: type_name.name().to_string(),
                 },
-                type_name.token().range.clone(),
+                type_name.token().range(),
             )),
         }
     }
@@ -632,7 +628,7 @@ impl Typechecker {
                         TypecheckerErrorKind::FunctionNotDefined {
                             name: name.name().to_string(),
                         },
-                        name.token().range.clone(),
+                        name.token().range(),
                     )),
                 }
             }
@@ -648,7 +644,7 @@ impl Typechecker {
                             expected: Type::Integer,
                             actual: self.expression_type(expression)?,
                         },
-                        expression.range().clone(),
+                        *expression.range(),
                     )),
                 },
                 TokenKind::ExclamationMark => Ok(Type::Boolean),
@@ -668,7 +664,7 @@ impl Typechecker {
                             expected: left_type.clone(),
                             actual: right_type.clone(),
                         },
-                        expression.range().clone(),
+                        *expression.range(),
                     ));
                 }
 

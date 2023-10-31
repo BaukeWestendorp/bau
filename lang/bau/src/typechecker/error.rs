@@ -71,10 +71,10 @@ impl std::fmt::Display for TypecheckerError {
                 format!("Function `{}` is not defined", name)
             }
             TypecheckerErrorKind::ReturnValueInVoidFunction => {
-                format!("Cannot return a value in a void function")
+                "Cannot return a value in a void function".to_string()
             }
             TypecheckerErrorKind::ExpectedReturnValue => {
-                format!("Expected a return value")
+                "Expected a return value".to_string()
             }
             TypecheckerErrorKind::IncompatibleInfixSides {
                 left,

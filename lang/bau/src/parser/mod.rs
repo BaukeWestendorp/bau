@@ -190,7 +190,7 @@ impl<'source> Parser<'source> {
                         ParserErrorKind::ExpectedItem {
                             found: self.peek_kind()?,
                         },
-                        self.peek()?.range.clone(),
+                        self.peek()?.range(),
                     ))
                 }
             }
@@ -206,7 +206,7 @@ impl<'source> Parser<'source> {
                     let end = self.peek().unwrap().clone();
                     ParsedItem::new(
                         ParsedItemKind::Function(f),
-                        CodeRange::from_ranges(start.range, end.range),
+                        CodeRange::from_ranges(start.range(), end.range()),
                     )
                 })
             }),
@@ -332,7 +332,7 @@ impl<'source> Parser<'source> {
                 ParserErrorKind::ExpectedExpression {
                     found: self.peek_kind()?,
                 },
-                self.peek()?.range.clone(),
+                self.peek()?.range(),
             ));
         }
 
@@ -374,24 +374,20 @@ impl<'source> Parser<'source> {
         let start = self.current_token_range()?;
 
         let mut lhs = self.parse_primary_expression(false)?;
-        loop {
-            let op = match self.peek_kind()? {
-                op @ (TokenKind::Plus
-                | TokenKind::Minus
-                | TokenKind::Asterisk
-                | TokenKind::Slash
-                | TokenKind::Percent
-                | TokenKind::EqualsEquals
-                | TokenKind::ExclamationMarkEquals
-                | TokenKind::LessThan
-                | TokenKind::LessThanEquals
-                | TokenKind::GreaterThan
-                | TokenKind::GreaterThanEquals
-                | TokenKind::AmpersandAmpersand
-                | TokenKind::PipePipe) => op,
-                _ => break,
-            };
-
+        while let op @ (TokenKind::Plus
+        | TokenKind::Minus
+        | TokenKind::Asterisk
+        | TokenKind::Slash
+        | TokenKind::Percent
+        | TokenKind::EqualsEquals
+        | TokenKind::ExclamationMarkEquals
+        | TokenKind::LessThan
+        | TokenKind::LessThanEquals
+        | TokenKind::GreaterThan
+        | TokenKind::GreaterThanEquals
+        | TokenKind::AmpersandAmpersand
+        | TokenKind::PipePipe) = self.peek_kind()?
+        {
             if let Some((left_binding_power, right_binding_power)) = infix_binding_power(op) {
                 if left_binding_power < min_binding_power {
                     break;
@@ -406,7 +402,7 @@ impl<'source> Parser<'source> {
                         left: Box::new(lhs.unwrap()),
                         right: Box::new(rhs.unwrap()),
                     },
-                    CodeRange::from_ranges(start.clone(), end.clone()),
+                    CodeRange::from_ranges(start, end),
                 ));
 
                 continue;
@@ -458,33 +454,33 @@ impl<'source> Parser<'source> {
 
     fn parse_prefix_operator_expression(&mut self) -> ParserResult<Option<ParsedExpression>> {
         let token = self.consume()?;
-        match token.kind {
+        match token.kind() {
             TokenKind::Plus | TokenKind::Minus | TokenKind::ExclamationMark => {
                 let end = self.current_token_range()?;
                 if let Some(expression) = self.parse_primary_expression(false)? {
                     Ok(Some(ParsedExpression::new(
                         ParsedExpressionKind::PrefixOperator {
-                            operator: token.kind,
+                            operator: token.kind(),
                             expression: Box::new(expression),
                         },
-                        CodeRange::from_ranges(token.range, end),
+                        CodeRange::from_ranges(token.range(), end),
                     )))
                 } else {
                     Err(ParserError::new(
                         ParserErrorKind::ExpectedExpression {
                             found: self.peek_kind()?,
                         },
-                        CodeRange::from_ranges(token.range, end),
+                        CodeRange::from_ranges(token.range(), end),
                     ))
                 }
             }
-            _ => return Ok(None),
+            _ => Ok(None),
         }
     }
 
     fn parse_literal_expression(&mut self) -> ParserResult<Option<ParsedExpression>> {
         let token = self.peek()?.clone();
-        let literal = match &token.kind {
+        let literal = match token.kind() {
             TokenKind::IntLiteral => {
                 let string_value = self.consume_specific(TokenKind::IntLiteral)?;
                 let string_value_text = self.text(&string_value);
@@ -514,7 +510,7 @@ impl<'source> Parser<'source> {
 
         Ok(Some(ParsedExpression::new(
             ParsedExpressionKind::Literal(literal),
-            token.range.clone(),
+            token.range(),
         )))
     }
 
@@ -539,7 +535,7 @@ impl<'source> Parser<'source> {
             TokenKind::ParenOpen => self.parse_function_call_expression(),
             _ => Ok(Some(ParsedExpression::new(
                 ParsedExpressionKind::Variable(ident),
-                token.range,
+                token.range(),
             ))),
         }
     }
@@ -560,7 +556,7 @@ impl<'source> Parser<'source> {
     }
 
     fn current_token_range(&self) -> ParserResult<CodeRange> {
-        self.peek().map(|token| token.range.clone())
+        self.peek().map(|token| token.range())
     }
 
     fn peek(&self) -> ParserResult<&Token> {
@@ -569,8 +565,7 @@ impl<'source> Parser<'source> {
 
     fn peek_at(&self, offset: usize) -> ParserResult<&Token> {
         self.tokens
-            .iter()
-            .nth(self.cursor + offset)
+            .get(self.cursor + offset)
             .map(Ok)
             .unwrap_or(Err(ParserError::new(
                 ParserErrorKind::UnexpectedEndOfFile,
@@ -578,7 +573,7 @@ impl<'source> Parser<'source> {
                     .last()
                     .cloned()
                     .expect("input should have at least one character")
-                    .range,
+                    .range(),
             )))
     }
 
@@ -587,7 +582,7 @@ impl<'source> Parser<'source> {
     }
 
     fn peek_kind_at(&self, offset: usize) -> ParserResult<TokenKind> {
-        self.peek_at(offset).map(|token| token.kind)
+        self.peek_at(offset).map(|token| token.kind())
     }
 
     fn consume(&mut self) -> ParserResult<Token> {
@@ -601,10 +596,10 @@ impl<'source> Parser<'source> {
         if !token.is(expected) {
             return Err(ParserError::new(
                 ParserErrorKind::UnexpectedToken {
-                    found: token.kind,
+                    found: token.kind(),
                     expected,
                 },
-                token.range,
+                token.range(),
             ));
         }
         Ok(token)
@@ -620,7 +615,7 @@ impl<'source> Parser<'source> {
     }
 
     fn text(&self, token: &Token) -> String {
-        self.source.text()[token.range.span.start..token.range.span.end].to_string()
+        self.source.text()[token.range().span.start..token.range().span.end].to_string()
     }
 
     fn done(&self) -> bool {

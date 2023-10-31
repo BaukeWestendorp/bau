@@ -36,7 +36,7 @@ impl std::fmt::Display for ExecutionError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         let str = match &self.kind {
             ExecutionErrorKind::MainFunctionNotFound => {
-                format!("Main function not found")
+                "Main function not found".to_string()
             }
             ExecutionErrorKind::VariableDoesNotExist { name } => {
                 format!("Variable `{}` does not exist", name)
@@ -60,13 +60,13 @@ impl std::fmt::Display for ExecutionError {
                 )
             }
             ExecutionErrorKind::PrefixWithInvalidType => {
-                format!("Prefix operator has invalid type")
+                "Prefix operator has invalid type".to_string()
             }
             ExecutionErrorKind::InfixWithVoidSide => {
-                format!("Infix operator can't be used with a side of type `void`")
+                "Infix operator can't be used with a side of type `void`".to_string()
             }
             ExecutionErrorKind::InfixWithInvalidTypes => {
-                format!("Infix operator has invalid types")
+                "Infix operator has invalid types".to_string()
             }
         };
 

@@ -15,7 +15,7 @@ pub use error::ExecutionError;
 
 use self::error::{ExecutionErrorKind, ExecutionResult};
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct Scope {
     variables: HashMap<String, Value>,
 }
@@ -71,7 +71,7 @@ enum ControlFlowMode {
     Return(Option<Value>),
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct Interpreter {
     functions: HashMap<String, CheckedFunctionItem>,
     scope_stack: Vec<Scope>,

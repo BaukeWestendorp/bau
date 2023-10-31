@@ -48,7 +48,7 @@ impl std::fmt::Display for ParserError {
                 )
             }
             ParserErrorKind::UnexpectedEndOfFile { .. } => {
-                format!("Expected a token, but found end of file instead")
+                "Expected a token, but found end of file instead".to_string()
             }
             ParserErrorKind::ExpectedItem { found } => {
                 format!(

@@ -19,7 +19,7 @@ impl<'text> Source<'text> {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub struct CodeRange {
     pub span: Span,
     pub coords: SourceCoords,
@@ -38,7 +38,7 @@ impl CodeRange {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub struct Span {
     pub start: usize,
     pub end: usize,
@@ -52,9 +52,13 @@ impl Span {
     pub fn len(&self) -> usize {
         self.end - self.start
     }
+
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub struct SourceCoords {
     pub line: usize,
     pub column: usize,

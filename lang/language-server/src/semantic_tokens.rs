@@ -136,7 +136,6 @@ fn bau_token_to_semantic_token_type(bau_token_kind: TokenKind) -> Option<u32> {
         TokenKind::Comment => None,
         TokenKind::Whitespace => None,
         TokenKind::EndOfFile => None,
-        TokenKind::EndOfLine => None,
         TokenKind::Invalid => None,
     }
 }

@@ -744,11 +744,7 @@ impl<'source> Parser<'source> {
 }
 
 pub fn preprocess_tokens(tokens: &mut Vec<Token>) {
-    tokens.retain(|token| {
-        !token.is(TokenKind::Whitespace)
-            && !token.is(TokenKind::Comment)
-            && !token.is(TokenKind::EndOfLine)
-    });
+    tokens.retain(|token| !token.is(TokenKind::Whitespace) && !token.is(TokenKind::Comment));
 }
 
 fn infix_binding_power(op: TokenKind) -> Option<(u8, u8)> {

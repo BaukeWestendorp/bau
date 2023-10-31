@@ -39,13 +39,23 @@ impl<'input> Tokenizer<'input> {
     }
 
     fn consume_token(&mut self, input: &str) -> Option<Token> {
+        if input.starts_with("//") {
+            let len = input
+                .char_indices()
+                .take_while(|(_, c)| *c != '\n')
+                .last()
+                .expect("At least one char should exist")
+                .0
+                + 1;
+            return Some(self.token(TokenKind::Comment, len));
+        }
+
         let next = input.chars().next().unwrap();
         match next {
-            '\n' => Some(self.token(TokenKind::EndOfLine, 1)),
             char if char.is_whitespace() => {
                 let len = input
                     .char_indices()
-                    .take_while(|(_, c)| c.is_whitespace() && *c != '\n')
+                    .take_while(|(_, c)| c.is_whitespace())
                     .last()
                     .expect("At least one whitespace char should exist")
                     .0

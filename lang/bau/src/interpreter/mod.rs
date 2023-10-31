@@ -364,7 +364,7 @@ impl Interpreter {
             _ => panic!("Invalid infix operator: {:?}", operator),
         }
 
-        return Ok(value);
+        Ok(value)
     }
 
     fn evaluate_if_statement(

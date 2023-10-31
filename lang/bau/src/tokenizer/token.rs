@@ -63,7 +63,6 @@ pub enum TokenKind {
     Comment,
     Whitespace,
     EndOfFile,
-    EndOfLine,
     Invalid,
 }
 
@@ -124,7 +123,6 @@ impl std::fmt::Display for TokenKind {
             Self::Comment => "comment".to_string(),
             Self::Whitespace => "whitespace".to_string(),
             Self::EndOfFile => "end of file".to_string(),
-            Self::EndOfLine => "end of line".to_string(),
             Self::Invalid => "invalid token".to_string(),
         };
 

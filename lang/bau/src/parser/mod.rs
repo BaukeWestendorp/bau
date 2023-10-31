@@ -87,6 +87,11 @@ pub enum ParsedStatementKind {
     Expression {
         expression: ParsedExpression,
     },
+    If {
+        condition: ParsedExpression,
+        then_body: Vec<ParsedStatement>,
+        else_body: Option<Vec<ParsedStatement>>,
+    },
     Loop {
         body: Vec<ParsedStatement>,
     },
@@ -321,6 +326,7 @@ impl<'source> Parser<'source> {
         match self.peek_kind()? {
             TokenKind::Let => self.parse_let_statement(),
             TokenKind::Return => self.parse_return_statement(),
+            TokenKind::If => self.parse_if_statement(),
             TokenKind::Loop => self.parse_loop_statement(),
             TokenKind::Identifier if self.peek_kind_at(1)? == TokenKind::Equals => {
                 self.parse_variable_assignment_statement()
@@ -379,6 +385,34 @@ impl<'source> Parser<'source> {
         self.consume_specific(TokenKind::Semicolon)?;
         Ok(Some(ParsedStatement::new(
             ParsedStatementKind::Return { value: expr },
+            CodeRange::from_ranges(start, end),
+        )))
+    }
+
+    fn parse_if_statement(&mut self) -> ParserResult<Option<ParsedStatement>> {
+        let start = self.current_token_range()?;
+        self.consume_specific(TokenKind::If)?;
+        let condition = self.parse_expression()?;
+        let mut end = self.current_token_range()?;
+        self.consume_specific(TokenKind::BraceOpen)?;
+        let then_body = self.parse_statement_list()?;
+        self.consume_specific(TokenKind::BraceClose)?;
+        let else_body = if self.consume_if(TokenKind::Else) {
+            self.consume_specific(TokenKind::BraceOpen)?;
+            let else_body = self.parse_statement_list()?;
+            self.consume_specific(TokenKind::BraceClose)?;
+            end = self.current_token_range()?;
+            Some(else_body)
+        } else {
+            None
+        };
+
+        Ok(Some(ParsedStatement::new(
+            ParsedStatementKind::If {
+                condition: condition.unwrap(),
+                then_body,
+                else_body,
+            },
             CodeRange::from_ranges(start, end),
         )))
     }
@@ -457,8 +491,8 @@ impl<'source> Parser<'source> {
                 }
 
                 self.consume_specific(op)?;
-                let rhs = self.parse_pratt_expression(right_binding_power)?;
                 let end = self.current_token_range()?;
+                let rhs = self.parse_pratt_expression(right_binding_power)?;
                 lhs = Some(ParsedExpression::new(
                     ParsedExpressionKind::InfixOperator {
                         operator: op,
@@ -480,6 +514,7 @@ impl<'source> Parser<'source> {
         &mut self,
         ignore_members: bool,
     ) -> ParserResult<Option<ParsedExpression>> {
+        let range = self.current_token_range()?;
         match self.peek_kind()? {
             TokenKind::IntLiteral
             | TokenKind::FloatLiteral
@@ -510,7 +545,7 @@ impl<'source> Parser<'source> {
                 ParserErrorKind::InvalidExpressionStart {
                     found: invalid_kind,
                 },
-                self.current_token_range()?,
+                range,
             )),
         }
     }
@@ -591,14 +626,13 @@ impl<'source> Parser<'source> {
     }
 
     fn parse_identifier_expression(&mut self) -> ParserResult<Option<ParsedExpression>> {
-        let token = self.peek()?.clone();
         let ident = self.parse_identifier()?;
-
+        let range = ident.token().range();
         match self.peek_kind()? {
             TokenKind::ParenOpen => self.parse_function_call_expression(),
             _ => Ok(Some(ParsedExpression::new(
                 ParsedExpressionKind::Variable(ident),
-                token.range(),
+                range,
             ))),
         }
     }

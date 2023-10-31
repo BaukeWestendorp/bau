@@ -62,6 +62,11 @@ pub enum CheckedStatementKind {
     Return {
         value: Option<CheckedExpression>,
     },
+    If {
+        condition: CheckedExpression,
+        then_body: Vec<CheckedStatement>,
+        else_body: Option<Vec<CheckedStatement>>,
+    },
     Expression {
         expression: CheckedExpression,
     },
@@ -348,6 +353,7 @@ impl Typechecker {
                 self.check_return_statement(statement, parent_function_return_type)
             }
             ParsedStatementKind::Expression { .. } => self.check_expression_statement(statement),
+            ParsedStatementKind::If { .. } => self.check_if_statement(statement),
             ParsedStatementKind::Loop { .. } => {
                 self.check_loop_statement(statement, parent_function_return_type)
             }
@@ -470,6 +476,53 @@ impl Typechecker {
                 })
             }
             _ => panic!("Expected expression statement"),
+        }
+    }
+
+    fn check_if_statement(
+        &mut self,
+        statement: &ParsedStatement,
+    ) -> TypecheckerResult<CheckedStatement> {
+        match statement.kind() {
+            ParsedStatementKind::If {
+                condition,
+                then_body,
+                else_body,
+            } => {
+                let checked_condition = self.check_expression(condition)?;
+                if self.expression_type(&checked_condition)? != Type::Boolean {
+                    return Err(TypecheckerError::new(
+                        TypecheckerErrorKind::TypeMismatch {
+                            expected: Type::Boolean,
+                            actual: self.expression_type(&checked_condition)?,
+                        },
+                        *condition.range(),
+                    ));
+                }
+
+                self.push_scope();
+                let checked_body = self.check_block(then_body, &Type::Void)?;
+                self.pop_scope();
+
+                let checked_else_body = if let Some(else_body) = else_body {
+                    self.push_scope();
+                    let checked_else_body = self.check_block(else_body, &Type::Void)?;
+                    self.pop_scope();
+                    Some(checked_else_body)
+                } else {
+                    None
+                };
+
+                Ok(CheckedStatement {
+                    kind: CheckedStatementKind::If {
+                        condition: checked_condition,
+                        then_body: checked_body,
+                        else_body: checked_else_body,
+                    },
+                    range: *statement.range(),
+                })
+            }
+            _ => panic!("Expected if statement"),
         }
     }
 
@@ -783,19 +836,19 @@ impl Typechecker {
                     | TokenKind::Minus
                     | TokenKind::Asterisk
                     | TokenKind::Slash
-                    | TokenKind::Percent
-                    | TokenKind::EqualsEquals
-                    | TokenKind::ExclamationMarkEquals
-                    | TokenKind::LessThan
-                    | TokenKind::LessThanEquals
-                    | TokenKind::GreaterThan
-                    | TokenKind::GreaterThanEquals => match left_type {
+                    | TokenKind::Percent => match left_type {
                         Type::Integer => Ok(Type::Integer),
                         Type::Float => Ok(Type::Float),
                         Type::String => Ok(Type::String),
                         Type::Boolean => Ok(Type::Boolean),
                         _ => panic!("Invalid infix operator"),
                     },
+                    TokenKind::EqualsEquals
+                    | TokenKind::ExclamationMarkEquals
+                    | TokenKind::LessThan
+                    | TokenKind::LessThanEquals
+                    | TokenKind::GreaterThan
+                    | TokenKind::GreaterThanEquals => Ok(Type::Boolean),
                     TokenKind::AmpersandAmpersand | TokenKind::PipePipe => match left_type {
                         Type::Boolean => Ok(Type::Boolean),
                         _ => panic!("Invalid infix operator"),

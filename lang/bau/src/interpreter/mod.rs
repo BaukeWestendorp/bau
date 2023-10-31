@@ -182,6 +182,13 @@ impl Interpreter {
             CheckedStatementKind::Expression { expression } => {
                 self.evaluate_expression(expression)?;
             }
+            CheckedStatementKind::If {
+                condition,
+                then_body,
+                else_body,
+            } => {
+                self.evaluate_if_statement(condition, then_body, else_body.as_deref())?;
+            }
             CheckedStatementKind::Loop { block } => loop {
                 self.push_scope();
                 if let Some(mode) = self.evaluate_block(block)? {
@@ -413,6 +420,22 @@ impl Interpreter {
                 ExecutionErrorKind::InfixWithInvalidTypes,
             )),
         }
+    }
+
+    fn evaluate_if_statement(
+        &mut self,
+        condition: &CheckedExpression,
+        then_body: &[CheckedStatement],
+        else_body: Option<&[CheckedStatement]>,
+    ) -> ExecutionResult<()> {
+        let condition = self.evaluate_expression(condition)?.unwrap();
+        if condition == Value::Boolean(true) {
+            self.evaluate_block(then_body)?;
+        } else if let Some(else_body) = else_body {
+            self.evaluate_block(else_body)?;
+        }
+
+        Ok(())
     }
 
     fn register_items(&mut self, checked_items: &[CheckedItem]) {

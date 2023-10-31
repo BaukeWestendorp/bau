@@ -57,7 +57,7 @@ fn get_semantic_tokens(file: &str) -> Vec<SemanticToken> {
             column - prev_token_start
         } else {
             column
-        } as u32;
+        };
 
         semantic_tokens.push(SemanticToken {
             delta_line,

@@ -29,6 +29,7 @@ pub enum TypecheckerErrorKind {
         operator: TokenKind,
         right: Type,
     },
+    InvalidVoidExpression,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -97,6 +98,9 @@ impl std::fmt::Display for TypecheckerError {
                     )
                 }
             },
+            TypecheckerErrorKind::InvalidVoidExpression => {
+                "Cannot use void expression in this context".to_string()
+            }
         };
 
         write!(f, "{}", str)

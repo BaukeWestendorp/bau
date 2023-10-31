@@ -82,6 +82,7 @@ fn bau_token_to_semantic_token_type(bau_token_kind: TokenKind) -> Option<u32> {
         TokenKind::If => Some(1),
         TokenKind::Else => Some(1),
         TokenKind::Loop => Some(1),
+        TokenKind::While => Some(1),
         TokenKind::Return => Some(1),
         TokenKind::Continue => Some(1),
         TokenKind::Break => Some(1),

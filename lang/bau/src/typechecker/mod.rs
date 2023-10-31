@@ -76,6 +76,10 @@ pub enum CheckedStatementKind {
     Loop {
         block: Vec<CheckedStatement>,
     },
+    While {
+        condition: CheckedExpression,
+        block: Vec<CheckedStatement>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -354,6 +358,9 @@ impl Typechecker {
             ParsedStatementKind::Loop { .. } => {
                 self.check_loop_statement(statement, parent_function_return_type)
             }
+            ParsedStatementKind::While { .. } => {
+                self.check_while_statement(statement, parent_function_return_type)
+            }
             ParsedStatementKind::VariableAssignment { .. } => {
                 self.check_variable_assignment_statement(statement)
             }
@@ -487,6 +494,16 @@ impl Typechecker {
                 then_body,
                 else_body,
             } => {
+                let condition = match condition {
+                    Some(condition) => condition,
+                    None => {
+                        return Err(TypecheckerError::new(
+                            TypecheckerErrorKind::InvalidVoidExpression,
+                            *statement.range(),
+                        ))
+                    }
+                };
+
                 let checked_condition = self.check_expression(condition)?;
                 if self.expression_type(&checked_condition)? != Type::Boolean {
                     return Err(TypecheckerError::new(
@@ -544,6 +561,50 @@ impl Typechecker {
                 })
             }
             _ => panic!("Expected loop statement"),
+        }
+    }
+
+    fn check_while_statement(
+        &mut self,
+        statement: &ParsedStatement,
+        parent_function_return_type: &Type,
+    ) -> TypecheckerResult<CheckedStatement> {
+        match statement.kind() {
+            ParsedStatementKind::While { condition, block } => {
+                let condition = match condition {
+                    Some(condition) => condition,
+                    None => {
+                        return Err(TypecheckerError::new(
+                            TypecheckerErrorKind::InvalidVoidExpression,
+                            *statement.range(),
+                        ))
+                    }
+                };
+
+                let checked_condition = self.check_expression(condition)?;
+                if self.expression_type(&checked_condition)? != Type::Boolean {
+                    return Err(TypecheckerError::new(
+                        TypecheckerErrorKind::TypeMismatch {
+                            expected: Type::Boolean,
+                            actual: self.expression_type(&checked_condition)?,
+                        },
+                        *condition.range(),
+                    ));
+                }
+
+                self.push_scope();
+                let checked_block = self.check_block(&block, parent_function_return_type)?;
+                self.pop_scope();
+
+                Ok(CheckedStatement {
+                    kind: CheckedStatementKind::While {
+                        condition: checked_condition,
+                        block: checked_block,
+                    },
+                    range: *statement.range(),
+                })
+            }
+            _ => panic!("Expected while statement"),
         }
     }
 

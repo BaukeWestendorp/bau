@@ -118,6 +118,7 @@ pub(crate) fn get_rules() -> Vec<Rule> {
         keyword!(TokenKind::If),
         keyword!(TokenKind::Else),
         keyword!(TokenKind::Loop),
+        keyword!(TokenKind::While),
         keyword!(TokenKind::Return),
         keyword!(TokenKind::Continue),
         keyword!(TokenKind::Break),

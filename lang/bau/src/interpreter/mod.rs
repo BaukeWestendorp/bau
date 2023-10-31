@@ -132,6 +132,9 @@ impl Interpreter {
                 else_body,
             } => return self.evaluate_if_statement(condition, then_body, else_body.as_deref()),
             CheckedStatementKind::Loop { block } => return self.evaluate_loop_statement(block),
+            CheckedStatementKind::While { condition, block } => {
+                return self.evaluate_while_statement(condition, block)
+            }
         };
         Ok(None)
     }
@@ -339,6 +342,28 @@ impl Interpreter {
             }
             self.pop_scope();
         }
+    }
+
+    fn evaluate_while_statement(
+        &mut self,
+        condition: &CheckedExpression,
+        block: &[CheckedStatement],
+    ) -> ExecutionResult<Option<ControlFlowMode>> {
+        loop {
+            let condition = self.evaluate_expression(condition)?.unwrap();
+            if condition.is_false() {
+                break;
+            }
+
+            self.push_scope();
+            if let Some(mode) = self.evaluate_block(block)? {
+                self.pop_scope();
+                return Ok(Some(mode));
+            }
+            self.pop_scope();
+        }
+
+        Ok(None)
     }
 
     fn register_items(&mut self, checked_items: &[CheckedItem]) {

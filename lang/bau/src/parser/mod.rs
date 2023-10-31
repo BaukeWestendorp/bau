@@ -136,12 +136,16 @@ pub enum ParsedStatementKind {
         expression: ParsedExpression,
     },
     If {
-        condition: ParsedExpression,
+        condition: Option<ParsedExpression>,
         then_body: Vec<ParsedStatement>,
         else_body: Option<Vec<ParsedStatement>>,
     },
     Loop {
         body: Vec<ParsedStatement>,
+    },
+    While {
+        condition: Option<ParsedExpression>,
+        block: Vec<ParsedStatement>,
     },
 }
 
@@ -368,6 +372,7 @@ impl<'source> Parser<'source> {
             TokenKind::Return => self.parse_return_statement(),
             TokenKind::If => self.parse_if_statement(),
             TokenKind::Loop => self.parse_loop_statement(),
+            TokenKind::While => self.parse_while_statement(),
             TokenKind::Identifier => match self.peek_kind_at(1)? {
                 TokenKind::Equals
                 | TokenKind::PlusEquals
@@ -454,7 +459,7 @@ impl<'source> Parser<'source> {
 
         Ok(Some(ParsedStatement::new(
             ParsedStatementKind::If {
-                condition: condition.unwrap(),
+                condition,
                 then_body,
                 else_body,
             },
@@ -472,6 +477,23 @@ impl<'source> Parser<'source> {
         Ok(Some(ParsedStatement::new(
             ParsedStatementKind::Loop { body },
             CodeRange::from_ranges(start?, end),
+        )))
+    }
+
+    fn parse_while_statement(&mut self) -> ParserResult<Option<ParsedStatement>> {
+        let start = self.current_token_range()?;
+        self.consume_specific(TokenKind::While)?;
+        let condition = self.parse_expression()?;
+        self.consume_specific(TokenKind::BraceOpen)?;
+        let body = self.parse_statement_list()?;
+        self.consume_specific(TokenKind::BraceClose)?;
+        let end = self.current_token_range()?;
+        Ok(Some(ParsedStatement::new(
+            ParsedStatementKind::While {
+                condition,
+                block: body,
+            },
+            CodeRange::from_ranges(start, end),
         )))
     }
 

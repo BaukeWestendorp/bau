@@ -1,3 +1,5 @@
+use error::BauError;
+use interpreter::value::Value;
 use parser::Parser;
 use source::Source;
 
@@ -16,39 +18,33 @@ impl Bau {
         Self {}
     }
 
-    pub fn run(&self, input: &str) {
+    pub fn run(&self, input: &str) -> Result<Option<Value>, Vec<BauError>> {
         let source = Source::new(input);
         match Parser::new(&source).parse_top_level() {
             Ok(items) => {
                 let mut typechecker = typechecker::Typechecker::new();
                 let checked_items = typechecker.check_items(&items);
                 if !typechecker.errors().is_empty() {
-                    for error in typechecker.errors() {
-                        error.print(&source);
-                    }
-                    std::process::exit(1);
+                    let errors = typechecker
+                        .errors()
+                        .iter()
+                        .map(|err| BauError::from(err.clone()))
+                        .collect();
+                    Err(errors)
                 } else {
                     let mut interpreter = interpreter::Interpreter::new();
                     match interpreter.run(&checked_items) {
-                        Ok(_) => {
-                            // Finished executing successfully
-                        }
-                        Err(error) => {
-                            error.print(&source);
-                            std::process::exit(1);
-                        }
+                        Ok(value) => Ok(value),
+                        Err(error) => Err(vec![BauError::from(error)]),
                     }
                 }
             }
-            Err(error) => {
-                error.print(&source);
-                std::process::exit(1);
-            }
-        };
+            Err(error) => Err(vec![BauError::from(error)]),
+        }
     }
 
-    pub fn run_file(&self, path: &str) {
+    pub fn run_file(&self, path: &str) -> Result<Option<Value>, Vec<BauError>> {
         let file_content = std::fs::read_to_string(path).unwrap();
-        self.run(&file_content);
+        self.run(&file_content)
     }
 }

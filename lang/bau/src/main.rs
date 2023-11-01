@@ -1,3 +1,4 @@
+use bau::source::Source;
 use bau::Bau;
 use clap::Parser;
 
@@ -8,5 +9,15 @@ struct Args {
 
 fn main() {
     let args = Args::parse();
-    Bau::new().run_file(&args.file)
+    let src = std::fs::read_to_string(&args.file)
+        .expect(format!("Failed to read file: `{}`", args.file).as_str());
+    match Bau::new().run(&src) {
+        Ok(_) => {}
+        Err(errors) => {
+            let source = Source::new(&src);
+            for error in errors.iter() {
+                error.print(&source);
+            }
+        }
+    }
 }

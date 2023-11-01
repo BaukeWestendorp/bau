@@ -13,7 +13,8 @@ pub mod value;
 
 use value::Value;
 
-use self::error::ExecutionResult;
+pub use error::ExecutionError;
+use error::ExecutionResult;
 
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct Scope {

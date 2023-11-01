@@ -14,8 +14,7 @@ use crate::tokenizer::token::TokenKind;
 pub mod error;
 
 pub use error::TypecheckerError;
-
-use self::error::{TypecheckerErrorKind, TypecheckerResult};
+use error::{TypecheckerErrorKind, TypecheckerResult};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum CheckedItemKind {

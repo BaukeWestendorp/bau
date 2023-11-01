@@ -1,6 +1,43 @@
+use crate::parser;
 use crate::source::{CodeRange, Source};
+use crate::{interpreter, typechecker};
 
 use colored::Colorize;
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum BauError {
+    ParserError(parser::ParserError),
+    TypecheckerError(typechecker::TypecheckerError),
+    ExecutionError(interpreter::ExecutionError),
+}
+
+impl BauError {
+    pub fn print(&self, source: &Source) {
+        match self {
+            Self::ParserError(error) => error.print(source),
+            Self::TypecheckerError(error) => error.print(source),
+            Self::ExecutionError(error) => error.print(source),
+        }
+    }
+}
+
+impl From<parser::ParserError> for BauError {
+    fn from(error: parser::ParserError) -> Self {
+        Self::ParserError(error)
+    }
+}
+
+impl From<typechecker::TypecheckerError> for BauError {
+    fn from(error: typechecker::TypecheckerError) -> Self {
+        Self::TypecheckerError(error)
+    }
+}
+
+impl From<interpreter::ExecutionError> for BauError {
+    fn from(error: interpreter::ExecutionError) -> Self {
+        Self::ExecutionError(error)
+    }
+}
 
 pub fn print_error(source: &Source, range: Option<&CodeRange>, message: &str) {
     // Show error message

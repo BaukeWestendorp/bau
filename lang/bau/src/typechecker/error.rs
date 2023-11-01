@@ -30,6 +30,7 @@ pub enum TypecheckerErrorKind {
         right: Type,
     },
     InvalidVoidExpression,
+    MainFunctionNotDefined,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -100,6 +101,9 @@ impl std::fmt::Display for TypecheckerError {
             },
             TypecheckerErrorKind::InvalidVoidExpression => {
                 "Cannot use void expression in this context".to_string()
+            }
+            TypecheckerErrorKind::MainFunctionNotDefined => {
+                "Main function is not defined".to_string()
             }
         };
 

@@ -3,12 +3,12 @@ use std::collections::HashMap;
 use crate::interpreter::builtin;
 use crate::interpreter::value::Value;
 use crate::parser::{
-    AssignmentOperator, Identifier, ParsedExpression, ParsedExpressionKind,
+    AssignmentOperator, Identifier, ParsedExpression, ParsedExpressionKind, ParsedExtendItem,
     ParsedFunctionParameter, ParsedItem, ParsedItemKind, ParsedStatement, ParsedStatementKind,
     PrefixOperator, TypeName,
 };
 
-use crate::source::CodeRange;
+use crate::source::{CodeRange, SourceCoords, Span};
 use crate::tokenizer::token::TokenKind;
 
 pub mod error;
@@ -19,6 +19,7 @@ use error::{TypecheckerErrorKind, TypecheckerResult};
 #[derive(Debug, Clone, PartialEq)]
 pub enum CheckedItemKind {
     Function(CheckedFunctionItem),
+    Extend(CheckedExtendItem),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -47,6 +48,12 @@ pub struct CheckedFunctionItem {
 pub struct CheckedFunctionParameter {
     pub name: String,
     pub type_: Type,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct CheckedExtendItem {
+    pub type_: Type,
+    pub methods: Vec<CheckedFunctionItem>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -102,7 +109,7 @@ pub enum CheckedExpressionKind {
     Literal(Value),
     Variable(CheckedVariable),
     FunctionCall {
-        name: Identifier,
+        name: String,
         arguments: Vec<CheckedExpression>,
     },
     PrefixOperator {
@@ -142,7 +149,7 @@ pub struct CheckedVariable {
     pub type_: Type,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Type {
     Void,
     Integer,
@@ -182,6 +189,7 @@ pub struct Typechecker {
     errors: Vec<TypecheckerError>,
     scope_stack: Vec<Scope>,
     functions: HashMap<String, CheckedFunctionDefinition>,
+    methods: HashMap<Type, HashMap<String, CheckedFunctionDefinition>>,
 }
 
 impl Typechecker {
@@ -194,6 +202,7 @@ impl Typechecker {
             errors: vec![],
             scope_stack: vec![],
             functions: HashMap::new(),
+            methods: HashMap::new(),
         }
     }
 
@@ -213,6 +222,31 @@ impl Typechecker {
                         }
                     };
                     self.register_function(function_definition);
+                }
+                ParsedItemKind::Extend(extend_item) => {
+                    let type_ = match self.check_type(&extend_item.type_name) {
+                        Ok(type_) => type_,
+                        Err(error) => {
+                            self.errors.push(error);
+                            continue;
+                        }
+                    };
+
+                    for function in extend_item.functions.iter() {
+                        let function_item = ParsedItem::new(
+                            ParsedItemKind::Function(function.clone()),
+                            function.range,
+                        );
+                        let function_definition =
+                            match self.check_function_definition(&function_item, false) {
+                                Ok(function_definition) => function_definition,
+                                Err(error) => {
+                                    self.errors.push(error);
+                                    continue;
+                                }
+                            };
+                        self.register_method(type_, function_definition);
+                    }
                 }
             }
         }
@@ -235,8 +269,30 @@ impl Typechecker {
                         range: *item.range(),
                     });
                 }
+                ParsedItemKind::Extend(extend_item) => {
+                    let extend = match self.check_extend_item(extend_item.clone()) {
+                        Ok(extend) => extend,
+                        Err(error) => {
+                            self.errors.push(error);
+                            continue;
+                        }
+                    };
+                    checked_items.push(CheckedItem {
+                        kind: CheckedItemKind::Extend(extend),
+                        range: *item.range(),
+                    });
+                }
             }
         }
+
+        // Check if main function is found
+        if self.get_function_definition_by_name("main").is_none() {
+            self.errors.push(TypecheckerError::new(
+                TypecheckerErrorKind::MainFunctionNotDefined,
+                CodeRange::new(Span::new(0, 0), SourceCoords::new(0, 0)),
+            ));
+        }
+
         checked_items
     }
 
@@ -248,7 +304,9 @@ impl Typechecker {
 
         let definition = self.check_function_definition(function_item, true)?;
 
-        let ParsedItemKind::Function(function) = function_item.kind();
+        let ParsedItemKind::Function(function) = function_item.kind() else {
+            panic!("Expected function item");
+        };
 
         let body = self.check_function_body(&function.body, &definition.return_type)?;
 
@@ -281,7 +339,9 @@ impl Typechecker {
         function_item: &ParsedItem,
         register_parameters: bool,
     ) -> TypecheckerResult<CheckedFunctionDefinition> {
-        let ParsedItemKind::Function(function) = function_item.kind();
+        let ParsedItemKind::Function(function) = function_item.kind() else {
+            panic!("Expected function item");
+        };
 
         let parameters = self.check_function_parameters(&function.parameters)?;
 
@@ -297,7 +357,7 @@ impl Typechecker {
         }
 
         Ok(CheckedFunctionDefinition {
-            name: function.name.clone(),
+            name: function.name.name().to_string(),
             parameters,
             return_type,
         })
@@ -311,7 +371,7 @@ impl Typechecker {
         for parameter in parameters.iter() {
             let type_ = self.check_type(&parameter.type_name)?;
             checked_parameters.push(CheckedFunctionParameter {
-                name: parameter.name.clone(),
+                name: parameter.name.name().to_string(),
                 type_,
             });
         }
@@ -325,6 +385,23 @@ impl Typechecker {
     ) -> TypecheckerResult<Vec<CheckedStatement>> {
         let checked_body = self.check_block(body, parent_function_return_type)?;
         Ok(checked_body)
+    }
+
+    fn check_extend_item(
+        &mut self,
+        extend_item: ParsedExtendItem,
+    ) -> TypecheckerResult<CheckedExtendItem> {
+        let type_ = self.check_type(&extend_item.type_name)?;
+
+        let mut methods = vec![];
+        for function in extend_item.functions.iter() {
+            let function_item =
+                ParsedItem::new(ParsedItemKind::Function(function.clone()), function.range);
+            let method = self.check_function_item(&function_item)?;
+            methods.push(method);
+        }
+
+        Ok(CheckedExtendItem { type_, methods })
     }
 
     fn check_block(
@@ -742,7 +819,7 @@ impl Typechecker {
 
         Ok(CheckedExpression::new(
             CheckedExpressionKind::FunctionCall {
-                name: Identifier::new(name.name().to_string(), name.token().clone()),
+                name: name.name().to_string(),
                 arguments: checked_arguments,
             },
             *expression.range(),
@@ -873,13 +950,13 @@ impl Typechecker {
             },
             CheckedExpressionKind::Variable(variable) => Ok(variable.type_.clone()),
             CheckedExpressionKind::FunctionCall { name, .. } => {
-                match self.get_function_definition_by_name(name.name()) {
+                match self.get_function_definition_by_name(name) {
                     Some(function_definition) => Ok(function_definition.return_type),
                     None => Err(TypecheckerError::new(
                         TypecheckerErrorKind::FunctionNotDefined {
-                            name: name.name().to_string(),
+                            name: name.to_string(),
                         },
-                        name.token().range(),
+                        *expression.range(),
                     )),
                 }
             }
@@ -977,7 +1054,12 @@ impl Typechecker {
     }
 
     fn register_function(&mut self, function: CheckedFunctionDefinition) {
-        self.functions.insert(function.name.clone(), function);
+        self.functions.insert(function.name.to_string(), function);
+    }
+
+    fn register_method(&mut self, type_: Type, method: CheckedFunctionDefinition) {
+        let methods = self.methods.entry(type_).or_insert_with(HashMap::new);
+        methods.insert(method.name.clone(), method);
     }
 
     fn get_function_definition_by_name(&self, name: &str) -> Option<CheckedFunctionDefinition> {

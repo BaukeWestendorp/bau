@@ -74,6 +74,7 @@ impl TypeName {
 #[derive(Debug, Clone, PartialEq)]
 pub enum ParsedItemKind {
     Function(ParsedFunctionItem),
+    Extend(ParsedExtendItem),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -98,23 +99,23 @@ impl ParsedItem {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ParsedFunctionItem {
-    pub name: String,
+    pub name: Identifier,
     pub parameters: Vec<ParsedFunctionParameter>,
     pub return_type_name: TypeName,
     pub body: Vec<ParsedStatement>,
+    pub range: CodeRange,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ParsedFunctionParameter {
-    pub name: String,
+    pub name: Identifier,
     pub type_name: TypeName,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct Parser<'source> {
-    source: &'source Source<'source>,
-    tokens: Vec<Token>,
-    cursor: usize,
+pub struct ParsedExtendItem {
+    pub type_name: TypeName,
+    pub functions: Vec<ParsedFunctionItem>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -228,6 +229,13 @@ impl Identifier {
     }
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct Parser<'source> {
+    source: &'source Source<'source>,
+    tokens: Vec<Token>,
+    cursor: usize,
+}
+
 impl<'source> Parser<'source> {
     pub fn new(source: &'source Source) -> Self {
         let mut tokens = Tokenizer::new(source.text()).tokenize();
@@ -258,26 +266,41 @@ impl<'source> Parser<'source> {
     }
 
     fn parse_item(&mut self) -> ParserResult<Option<ParsedItem>> {
-        let start = self.peek()?.clone();
+        let start = self.current_token_range()?;
         match self.peek_kind()? {
-            TokenKind::Fn => self.parse_function_item().map(|f| {
-                f.map(|f| {
-                    let end = self.peek().unwrap().clone();
-                    ParsedItem::new(
-                        ParsedItemKind::Function(f),
-                        CodeRange::from_ranges(start.range(), end.range()),
-                    )
+            TokenKind::Fn => {
+                let end = self.current_token_range()?;
+
+                self.parse_function_item().map(|f| {
+                    f.map(|f| {
+                        ParsedItem::new(
+                            ParsedItemKind::Function(f),
+                            CodeRange::from_ranges(start, end),
+                        )
+                    })
                 })
-            }),
+            }
+            TokenKind::Extend => {
+                let end = self.current_token_range()?;
+
+                self.parse_extend_item().map(|e| {
+                    e.map(|e| {
+                        ParsedItem::new(
+                            ParsedItemKind::Extend(e),
+                            CodeRange::from_ranges(start, end),
+                        )
+                    })
+                })
+            }
             _ => Ok(None),
         }
     }
 
     fn parse_function_item(&mut self) -> ParserResult<Option<ParsedFunctionItem>> {
+        let start = self.current_token_range()?;
         self.consume_specific(TokenKind::Fn)?;
 
-        let name_ident = self.consume_specific(TokenKind::Identifier)?;
-        let name = self.text(&name_ident);
+        let name = self.parse_identifier()?;
 
         self.consume_specific(TokenKind::ParenOpen)?;
         let parameters = self.parse_function_parameters()?;
@@ -289,6 +312,8 @@ impl<'source> Parser<'source> {
 
         self.consume_specific(TokenKind::BraceOpen)?;
         let body = self.parse_statement_list()?;
+
+        let end = self.current_token_range()?;
         self.consume_specific(TokenKind::BraceClose)?;
 
         Ok(Some(ParsedFunctionItem {
@@ -296,6 +321,7 @@ impl<'source> Parser<'source> {
             parameters,
             return_type_name,
             body,
+            range: CodeRange::from_ranges(start, end),
         }))
     }
 
@@ -325,8 +351,7 @@ impl<'source> Parser<'source> {
     fn parse_function_parameter(&mut self) -> ParserResult<Option<ParsedFunctionParameter>> {
         let type_name = self.parse_type_name()?;
 
-        let name_ident = self.consume_specific(TokenKind::Identifier)?;
-        let name = self.text(&name_ident);
+        let name = self.parse_identifier()?;
 
         Ok(Some(ParsedFunctionParameter { name, type_name }))
     }
@@ -352,6 +377,28 @@ impl<'source> Parser<'source> {
             }
         }
         Ok(())
+    }
+
+    fn parse_extend_item(&mut self) -> ParserResult<Option<ParsedExtendItem>> {
+        self.consume_specific(TokenKind::Extend)?;
+
+        let type_name = self.parse_type_name()?;
+
+        self.consume_specific(TokenKind::BraceOpen)?;
+        let mut functions = vec![];
+        while self.peek_kind() != Ok(TokenKind::BraceClose) {
+            if let Some(function) = self.parse_function_item()? {
+                functions.push(function);
+            } else {
+                break;
+            }
+        }
+        self.consume_specific(TokenKind::BraceClose)?;
+
+        Ok(Some(ParsedExtendItem {
+            type_name,
+            functions,
+        }))
     }
 
     fn parse_statement_list(&mut self) -> ParserResult<Vec<ParsedStatement>> {

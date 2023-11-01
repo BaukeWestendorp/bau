@@ -1,10 +1,10 @@
 use std::collections::HashMap;
 
-use crate::parser::{AssignmentOperator, Identifier, PrefixOperator};
+use crate::parser::{AssignmentOperator, PrefixOperator};
 use crate::tokenizer::token::TokenKind;
 use crate::typechecker::{
-    CheckedExpression, CheckedExpressionKind, CheckedFunctionDefinition, CheckedFunctionItem,
-    CheckedItem, CheckedItemKind, CheckedStatement, CheckedStatementKind, CheckedVariable,
+    CheckedExpression, CheckedExpressionKind, CheckedFunctionItem, CheckedItem, CheckedItemKind,
+    CheckedStatement, CheckedStatementKind, CheckedVariable, Type,
 };
 
 pub mod builtin;
@@ -52,6 +52,7 @@ pub enum ControlFlowMode {
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct Interpreter {
     functions: HashMap<String, CheckedFunctionItem>,
+    methods: HashMap<Type, HashMap<String, CheckedFunctionItem>>,
     scope_stack: Vec<Scope>,
 }
 
@@ -59,13 +60,18 @@ impl Interpreter {
     pub fn new() -> Self {
         Self {
             functions: HashMap::new(),
+            methods: HashMap::new(),
             scope_stack: vec![],
         }
     }
 
     pub fn run(&mut self, checked_items: &[CheckedItem]) -> ExecutionResult<Option<Value>> {
-        for builtin_function in builtin::BUILTIN_FUNCTIONS.values() {
-            self.register_function_definition(builtin_function, vec![]);
+        for builtin_function_definition in builtin::BUILTIN_FUNCTIONS.values() {
+            let function = CheckedFunctionItem {
+                definition: builtin_function_definition.clone(),
+                body: vec![],
+            };
+            self.register_function(&function);
         }
         self.register_items(checked_items);
 
@@ -234,14 +240,14 @@ impl Interpreter {
 
     pub fn evaluate_function_call(
         &mut self,
-        name: &Identifier,
+        name: &str,
         arguments: &[CheckedExpression],
     ) -> ExecutionResult<Option<Value>> {
-        if self.function_is_builtin(name.name()) {
-            return builtin::evaluate_builtin_function(self, name.name(), arguments);
+        if self.function_is_builtin(name) {
+            return builtin::evaluate_builtin_function(self, name, arguments);
         }
 
-        let function = self.get_function(name.name()).clone();
+        let function = self.get_function(name).clone();
         self.evaluate_function(&function, arguments.clone())
     }
 
@@ -371,24 +377,27 @@ impl Interpreter {
         for item in checked_items {
             match item.kind() {
                 CheckedItemKind::Function(function) => {
-                    self.register_function_definition(&function.definition, function.body.clone());
+                    self.register_function(&function);
+                }
+                CheckedItemKind::Extend(extend) => {
+                    for function in &extend.methods {
+                        self.register_method(extend.type_, &function);
+                    }
                 }
             }
         }
     }
 
-    fn register_function_definition(
-        &mut self,
-        function_definition: &CheckedFunctionDefinition,
-        body: Vec<CheckedStatement>,
-    ) {
-        self.functions.insert(
-            function_definition.name.clone(),
-            CheckedFunctionItem {
-                definition: function_definition.clone(),
-                body,
-            },
-        );
+    fn register_function(&mut self, function: &CheckedFunctionItem) {
+        self.functions
+            .insert(function.definition.name.to_string(), function.clone());
+    }
+
+    fn register_method(&mut self, type_: Type, function: &CheckedFunctionItem) {
+        self.methods
+            .entry(type_)
+            .or_insert_with(HashMap::new)
+            .insert(function.definition.name.to_string(), function.clone());
     }
 
     pub fn main_function(&self) -> &CheckedFunctionItem {

@@ -1,5 +1,5 @@
 use crate::parser;
-use crate::source::{CodeRange, Source};
+use crate::source::{CodeRange, Source, SourceCoords, Span};
 use crate::{interpreter, typechecker};
 
 use colored::Colorize;
@@ -85,10 +85,15 @@ pub fn print_error(source: &Source, range: Option<&CodeRange>, message: &str) {
         cursor += line.len() + 1;
     }
 
+    // Don't print the underline if it's a general error.
+    if range.span == Span::new(0, 0) && range.coords == SourceCoords::new(0, 0) {
+        return;
+    }
+
     // Print a underline to show where the error occurred
     let underline_length = match line_count {
         1 => range.span.len(),
-        _ => lines.map(|line| line.len()).max().unwrap(),
+        _ => lines.map(|line| line.len()).max().unwrap_or(0),
     };
     print_line_gutter(max_line_number_len, None);
     eprintln!(

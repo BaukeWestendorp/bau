@@ -230,6 +230,11 @@ impl Interpreter {
             } => self
                 .evaluate_infix_operator(*operator, left, right)
                 .map(Some),
+            CheckedExpressionKind::MethodCall {
+                type_,
+                method_name,
+                arguments,
+            } => self.evaluate_method_call(type_, method_name, arguments),
         }
     }
 
@@ -311,6 +316,25 @@ impl Interpreter {
         Ok(value)
     }
 
+    fn evaluate_method_call(
+        &mut self,
+        type_: &Type,
+        method_name: &str,
+        arguments: &[CheckedExpression],
+    ) -> ExecutionResult<Option<Value>> {
+        let method = self
+            .methods
+            .get(type_)
+            .expect("Typechecker should have checked if type has methods")
+            .get(method_name)
+            .expect("Typechecker should have checked if method exists")
+            .clone();
+
+        // FIXME: Add `self` as first argument
+
+        self.evaluate_function(&method, arguments)
+    }
+
     fn evaluate_if_statement(
         &mut self,
         condition: &CheckedExpression,
@@ -377,11 +401,11 @@ impl Interpreter {
         for item in checked_items {
             match item.kind() {
                 CheckedItemKind::Function(function) => {
-                    self.register_function(&function);
+                    self.register_function(function);
                 }
                 CheckedItemKind::Extend(extend) => {
                     for function in &extend.methods {
-                        self.register_method(extend.type_, &function);
+                        self.register_method(extend.type_, function);
                     }
                 }
             }

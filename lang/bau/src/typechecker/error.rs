@@ -31,6 +31,10 @@ pub enum TypecheckerErrorKind {
     },
     InvalidVoidExpression,
     MainFunctionNotDefined,
+    MethodNotDefined {
+        type_: Type,
+        method_name: String,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -104,6 +108,12 @@ impl std::fmt::Display for TypecheckerError {
             }
             TypecheckerErrorKind::MainFunctionNotDefined => {
                 "Main function is not defined".to_string()
+            }
+            TypecheckerErrorKind::MethodNotDefined { type_, method_name } => {
+                format!(
+                    "Method `{}` is not defined for type `{}`",
+                    method_name, type_
+                )
             }
         };
 

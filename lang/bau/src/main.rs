@@ -10,7 +10,7 @@ struct Args {
 fn main() {
     let args = Args::parse();
     let src = std::fs::read_to_string(&args.file)
-        .expect(format!("Failed to read file: `{}`", args.file).as_str());
+        .unwrap_or_else(|_| panic!("Failed to read file: `{}`", args.file));
     match Bau::new().run(&src) {
         Ok(_) => {}
         Err(errors) => {

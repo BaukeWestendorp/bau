@@ -174,10 +174,7 @@ impl ParsedStatement {
 pub enum ParsedExpressionKind {
     Literal(Value),
     Variable(Identifier),
-    FunctionCall {
-        name: Identifier,
-        arguments: Vec<ParsedExpression>,
-    },
+    FunctionCall(ParsedFunctionCall),
     PrefixOperator {
         operator: PrefixOperator,
         expression: Box<ParsedExpression>,
@@ -186,6 +183,10 @@ pub enum ParsedExpressionKind {
         operator: TokenKind,
         left: Box<ParsedExpression>,
         right: Box<ParsedExpression>,
+    },
+    MethodCall {
+        expression: Box<ParsedExpression>,
+        call: ParsedFunctionCall,
     },
 }
 
@@ -207,6 +208,12 @@ impl ParsedExpression {
     pub fn range(&self) -> &CodeRange {
         &self.range
     }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ParsedFunctionCall {
+    pub name: Identifier,
+    pub arguments: Vec<ParsedExpression>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -596,8 +603,9 @@ impl<'source> Parser<'source> {
     ) -> ParserResult<Option<ParsedExpression>> {
         let start = self.current_token_range()?;
 
-        let mut lhs = self.parse_primary_expression(false)?;
-        while let op @ (TokenKind::Plus
+        let mut lhs = self.parse_primary_expression()?;
+        while let op @ (TokenKind::Period
+        | TokenKind::Plus
         | TokenKind::Minus
         | TokenKind::Asterisk
         | TokenKind::Slash
@@ -616,9 +624,23 @@ impl<'source> Parser<'source> {
                     break;
                 }
 
+                if op == TokenKind::Period {
+                    self.consume_specific(op)?;
+                    let end = self.current_token_range()?;
+                    lhs = Some(ParsedExpression::new(
+                        ParsedExpressionKind::MethodCall {
+                            expression: Box::new(lhs.unwrap()),
+                            call: self.parse_function_call()?,
+                        },
+                        CodeRange::from_ranges(start, end),
+                    ));
+                    continue;
+                }
+
                 self.consume_specific(op)?;
                 let end = self.current_token_range()?;
                 let rhs = self.parse_pratt_expression(right_binding_power)?;
+
                 lhs = Some(ParsedExpression::new(
                     ParsedExpressionKind::InfixOperator {
                         operator: op,
@@ -636,10 +658,7 @@ impl<'source> Parser<'source> {
         Ok(lhs)
     }
 
-    fn parse_primary_expression(
-        &mut self,
-        ignore_members: bool,
-    ) -> ParserResult<Option<ParsedExpression>> {
+    fn parse_primary_expression(&mut self) -> ParserResult<Option<ParsedExpression>> {
         let range = self.current_token_range()?;
         match self.peek_kind()? {
             TokenKind::IntLiteral
@@ -648,13 +667,6 @@ impl<'source> Parser<'source> {
             | TokenKind::BoolLiteral => self.parse_literal_expression(),
             TokenKind::Identifier => match self.peek_kind_at(1) {
                 Ok(TokenKind::ParenOpen) => self.parse_function_call_expression(),
-                Ok(TokenKind::Period) if !ignore_members => match self.peek_kind_at(2) {
-                    Ok(TokenKind::Identifier) => match self.peek_kind_at(3)? {
-                        TokenKind::ParenOpen => todo!("Implement method calls"),
-                        _ => todo!("Implement member access"),
-                    },
-                    _ => Ok(None),
-                },
                 Err(_) => Ok(None),
                 _ => self.parse_identifier_expression(),
             },
@@ -681,7 +693,7 @@ impl<'source> Parser<'source> {
         match token.kind() {
             TokenKind::Plus | TokenKind::Minus | TokenKind::ExclamationMark => {
                 let end = self.current_token_range()?;
-                if let Some(expression) = self.parse_primary_expression(false)? {
+                if let Some(expression) = self.parse_primary_expression()? {
                     let operator = match PrefixOperator::try_from(token.kind()) {
                         Ok(op) => op,
                         Err(_) => {
@@ -751,15 +763,20 @@ impl<'source> Parser<'source> {
 
     fn parse_function_call_expression(&mut self) -> ParserResult<Option<ParsedExpression>> {
         let start = self.current_token_range()?;
+        let function_call = self.parse_function_call()?;
+        let end = self.previous_token_range()?;
+        Ok(Some(ParsedExpression::new(
+            ParsedExpressionKind::FunctionCall(function_call),
+            CodeRange::from_ranges(start, end),
+        )))
+    }
+
+    fn parse_function_call(&mut self) -> ParserResult<ParsedFunctionCall> {
         let name = self.parse_identifier()?;
         self.consume_specific(TokenKind::ParenOpen)?;
         let arguments = self.parse_function_arguments()?;
-        let end = self.current_token_range()?;
         self.consume_specific(TokenKind::ParenClose)?;
-        Ok(Some(ParsedExpression::new(
-            ParsedExpressionKind::FunctionCall { name, arguments },
-            CodeRange::from_ranges(start, end),
-        )))
+        Ok(ParsedFunctionCall { name, arguments })
     }
 
     fn parse_identifier_expression(&mut self) -> ParserResult<Option<ParsedExpression>> {
@@ -878,15 +895,16 @@ pub fn preprocess_tokens(tokens: &mut Vec<Token>) {
 
 fn infix_binding_power(op: TokenKind) -> Option<(u8, u8)> {
     match op {
-        TokenKind::PipePipe => Some((1, 2)),
-        TokenKind::AmpersandAmpersand => Some((3, 4)),
-        TokenKind::EqualsEquals | TokenKind::ExclamationMarkEquals => Some((5, 6)),
+        TokenKind::Period => Some((0, 1)),
+        TokenKind::PipePipe => Some((2, 3)),
+        TokenKind::AmpersandAmpersand => Some((4, 5)),
+        TokenKind::EqualsEquals | TokenKind::ExclamationMarkEquals => Some((6, 7)),
         TokenKind::LessThan
         | TokenKind::LessThanEquals
         | TokenKind::GreaterThan
-        | TokenKind::GreaterThanEquals => Some((7, 8)),
-        TokenKind::Plus | TokenKind::Minus => Some((9, 10)),
-        TokenKind::Asterisk | TokenKind::Slash | TokenKind::Percent => Some((11, 12)),
+        | TokenKind::GreaterThanEquals => Some((8, 9)),
+        TokenKind::Plus | TokenKind::Minus => Some((10, 11)),
+        TokenKind::Asterisk | TokenKind::Slash | TokenKind::Percent => Some((12, 13)),
         _ => None,
     }
 }

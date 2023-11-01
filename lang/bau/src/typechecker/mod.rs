@@ -121,6 +121,11 @@ pub enum CheckedExpressionKind {
         operator: TokenKind,
         right: Box<CheckedExpression>,
     },
+    MethodCall {
+        type_: Type,
+        method_name: String,
+        arguments: Vec<CheckedExpression>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -351,7 +356,7 @@ impl Typechecker {
             for parameter in parameters.iter() {
                 self.register_var_in_current_scope(CheckedVariable {
                     name: parameter.name.clone(),
-                    type_: parameter.type_.clone(),
+                    type_: parameter.type_,
                 });
             }
         }
@@ -468,7 +473,7 @@ impl Typechecker {
                 if type_ != self.expression_type(&checked_initial_value)? {
                     return Err(TypecheckerError::new(
                         TypecheckerErrorKind::TypeMismatch {
-                            expected: type_.clone(),
+                            expected: type_,
                             actual: self.expression_type(&checked_initial_value)?,
                         },
                         checked_initial_value.range,
@@ -477,7 +482,7 @@ impl Typechecker {
 
                 self.register_var_in_current_scope(CheckedVariable {
                     name: name.name().to_string(),
-                    type_: type_.clone(),
+                    type_,
                 });
 
                 Ok(CheckedStatement {
@@ -522,7 +527,7 @@ impl Typechecker {
                     if parent_function_return_type != &self.expression_type(&checked_value)? {
                         return Err(TypecheckerError::new(
                             TypecheckerErrorKind::TypeMismatch {
-                                expected: parent_function_return_type.clone(),
+                                expected: *parent_function_return_type,
                                 actual: self.expression_type(&checked_value)?,
                             },
                             *value.range(),
@@ -669,7 +674,7 @@ impl Typechecker {
                 }
 
                 self.push_scope();
-                let checked_block = self.check_block(&block, parent_function_return_type)?;
+                let checked_block = self.check_block(block, parent_function_return_type)?;
                 self.pop_scope();
 
                 Ok(CheckedStatement {
@@ -709,7 +714,7 @@ impl Typechecker {
                 if variable.type_ != self.expression_type(&checked_value)? {
                     return Err(TypecheckerError::new(
                         TypecheckerErrorKind::TypeMismatch {
-                            expected: variable.type_.clone(),
+                            expected: variable.type_,
                             actual: self.expression_type(&checked_value)?,
                         },
                         *value.range(),
@@ -745,6 +750,7 @@ impl Typechecker {
             ParsedExpressionKind::InfixOperator { .. } => {
                 self.check_infix_operator_expression(expression)
             }
+            ParsedExpressionKind::MethodCall { .. } => self.check_method_call(expression),
         }
     }
 
@@ -806,20 +812,20 @@ impl Typechecker {
         &mut self,
         expression: &ParsedExpression,
     ) -> TypecheckerResult<CheckedExpression> {
-        let (name, arguments) = match expression.kind() {
-            ParsedExpressionKind::FunctionCall { name, arguments } => (name, arguments),
+        let function_call = match expression.kind() {
+            ParsedExpressionKind::FunctionCall(function_call) => function_call,
             _ => panic!("Expected function call expression"),
         };
 
         let mut checked_arguments = vec![];
-        for argument in arguments.iter() {
+        for argument in function_call.arguments.iter() {
             let checked_argument = self.check_expression(argument)?;
             checked_arguments.push(checked_argument);
         }
 
         Ok(CheckedExpression::new(
             CheckedExpressionKind::FunctionCall {
-                name: name.name().to_string(),
+                name: function_call.name.name().to_string(),
                 arguments: checked_arguments,
             },
             *expression.range(),
@@ -906,9 +912,9 @@ impl Typechecker {
         if left_type != right_type {
             return Err(TypecheckerError::new(
                 TypecheckerErrorKind::IncompatibleInfixSides {
-                    left: left_type.clone(),
+                    left: left_type,
                     operator: *operator,
-                    right: right_type.clone(),
+                    right: right_type,
                 },
                 CodeRange::from_ranges(*left.range(), *right.range()),
             ));
@@ -921,6 +927,33 @@ impl Typechecker {
                 right: Box::new(checked_right),
             },
             *left.range(),
+        ))
+    }
+
+    fn check_method_call(
+        &mut self,
+        expression: &ParsedExpression,
+    ) -> TypecheckerResult<CheckedExpression> {
+        let (expression, call) = match expression.kind() {
+            ParsedExpressionKind::MethodCall { expression, call } => (expression, call),
+            _ => panic!("Expected method call expression"),
+        };
+
+        let checked_expression = self.check_expression(expression)?;
+        let type_ = self.expression_type(&checked_expression)?;
+        let mut checked_arguments = vec![];
+        for argument in call.arguments.iter() {
+            let checked_argument = self.check_expression(argument)?;
+            checked_arguments.push(checked_argument);
+        }
+
+        Ok(CheckedExpression::new(
+            CheckedExpressionKind::MethodCall {
+                type_,
+                method_name: call.name.name().to_string(),
+                arguments: checked_arguments,
+            },
+            *expression.range(),
         ))
     }
 
@@ -948,7 +981,7 @@ impl Typechecker {
                 Value::String(_) => Ok(Type::String),
                 Value::Boolean(_) => Ok(Type::Boolean),
             },
-            CheckedExpressionKind::Variable(variable) => Ok(variable.type_.clone()),
+            CheckedExpressionKind::Variable(variable) => Ok(variable.type_),
             CheckedExpressionKind::FunctionCall { name, .. } => {
                 match self.get_function_definition_by_name(name) {
                     Some(function_definition) => Ok(function_definition.return_type),
@@ -990,8 +1023,8 @@ impl Typechecker {
                 if left_type != right_type {
                     return Err(TypecheckerError::new(
                         TypecheckerErrorKind::TypeMismatch {
-                            expected: left_type.clone(),
-                            actual: right_type.clone(),
+                            expected: left_type,
+                            actual: right_type,
                         },
                         *expression.range(),
                     ));
@@ -1021,6 +1054,23 @@ impl Typechecker {
                     },
                     _ => panic!("Invalid infix operator"),
                 }
+            }
+            CheckedExpressionKind::MethodCall {
+                type_, method_name, ..
+            } => {
+                if self.methods.get(type_).is_some() {
+                    if let Some(method) = self.get_method(type_, method_name) {
+                        return Ok(method.return_type);
+                    }
+                }
+
+                Err(TypecheckerError::new(
+                    TypecheckerErrorKind::MethodNotDefined {
+                        type_: *type_,
+                        method_name: method_name.to_string(),
+                    },
+                    *expression.range(),
+                ))
             }
         }
     }
@@ -1064,5 +1114,10 @@ impl Typechecker {
 
     fn get_function_definition_by_name(&self, name: &str) -> Option<CheckedFunctionDefinition> {
         self.functions.get(name).cloned()
+    }
+
+    fn get_method(&self, type_: &Type, name: &str) -> Option<CheckedFunctionDefinition> {
+        let methods = self.methods.get(type_)?;
+        methods.get(name).cloned()
     }
 }

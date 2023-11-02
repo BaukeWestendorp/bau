@@ -35,6 +35,10 @@ pub enum TypecheckerErrorKind {
         type_: Type,
         method_name: String,
     },
+    ArgumentCountMismatch {
+        expected: usize,
+        actual: usize,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -113,6 +117,12 @@ impl std::fmt::Display for TypecheckerError {
                 format!(
                     "Method `{}` is not defined for type `{}`",
                     method_name, type_
+                )
+            }
+            TypecheckerErrorKind::ArgumentCountMismatch { expected, actual } => {
+                format!(
+                    "Expected {} arguments, but found {} instead",
+                    expected, actual
                 )
             }
         };

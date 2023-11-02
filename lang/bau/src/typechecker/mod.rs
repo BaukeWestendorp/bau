@@ -817,6 +817,29 @@ impl Typechecker {
             _ => panic!("Expected function call expression"),
         };
 
+        let function_definition =
+            match self.get_function_definition_by_name(function_call.name.name()) {
+                Some(function_definition) => function_definition,
+                None => {
+                    return Err(TypecheckerError::new(
+                        TypecheckerErrorKind::FunctionNotDefined {
+                            name: function_call.name.name().to_string(),
+                        },
+                        *expression.range(),
+                    ))
+                }
+            };
+
+        if function_call.arguments.len() != function_definition.parameters.len() {
+            return Err(TypecheckerError::new(
+                TypecheckerErrorKind::ArgumentCountMismatch {
+                    expected: function_definition.parameters.len(),
+                    actual: function_call.arguments.len(),
+                },
+                *expression.range(),
+            ));
+        }
+
         let mut checked_arguments = vec![];
         for argument in function_call.arguments.iter() {
             let checked_argument = self.check_expression(argument)?;
@@ -941,6 +964,29 @@ impl Typechecker {
 
         let checked_expression = self.check_expression(expression)?;
         let type_ = self.expression_type(&checked_expression)?;
+
+        let function_definition = match self.get_method(&type_, call.name.name()) {
+            Some(function_definition) => function_definition,
+            None => {
+                return Err(TypecheckerError::new(
+                    TypecheckerErrorKind::FunctionNotDefined {
+                        name: call.name.name().to_string(),
+                    },
+                    call.name.token().range(),
+                ))
+            }
+        };
+
+        if call.arguments.len() != function_definition.parameters.len() {
+            return Err(TypecheckerError::new(
+                TypecheckerErrorKind::ArgumentCountMismatch {
+                    expected: function_definition.parameters.len(),
+                    actual: call.arguments.len(),
+                },
+                call.name.token().range(),
+            ));
+        }
+
         let mut checked_arguments = vec![];
         for argument in call.arguments.iter() {
             let checked_argument = self.check_expression(argument)?;
